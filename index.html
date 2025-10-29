@@ -3,97 +3,77 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Cronograma Ionix – HTML (sin React)</title>
+  <title>Cronograma Ionix — Gantt + Popover de Color</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root{
-      --ionix-blue:#005B96; 
-      --ionix-blue-light:#3A8EC4; 
-      --ionix-gray-mid:#6E7C8E; 
-      --ionix-gray-dark:#2C3E50; 
-      --green:#10b981;
-      --grid-border:#d1e4eb;
-      --row-border:#e0e0e0;
+      /* Paleta parametrizable */
+      --bar-1:#005B96; --bar-2:#3A8EC4; --bar-3:#6E7C8E; --bar-4:#2C3E50; --bar-5:#059669; --bar-6:#7c3aed; --bar-7:#f97316;
+      --green:#10b981; --grid-border:#d1e4eb; --row-border:#e0e0e0; --panel:#fafafa; --ink:#1f364d;
     }
     *{box-sizing:border-box}
-    body{font-family: 'Montserrat','Segoe UI',system-ui,-apple-system,Arial; background:#f5f7fb; color:#1f364d; margin:0;}
-    .wrap{max-width:1100px;margin:24px auto; background:#fff; border:1px solid #e4e7ec; border-radius:16px; padding:16px 20px 28px; box-shadow:0 10px 30px rgba(18,38,63,.06)}
-    h1{font-size:28px; font-weight:800; color:var(--ionix-blue); margin:0 0 12px}
-    h2{font-size:18px; margin:0 0 12px}
+    body{font-family:'Montserrat','Segoe UI',system-ui,-apple-system,Arial; background:#f5f7fb; color:var(--ink); margin:0}
+    .wrap{max-width:1100px;margin:24px auto;background:#fff;border:1px solid #e4e7ec;border-radius:16px;padding:16px 20px 28px;box-shadow:0 10px 30px rgba(18,38,63,.06)}
+    h1{font-size:28px;font-weight:800;color:var(--bar-1);margin:0 0 12px}
+    h2{font-size:18px;margin:0 0 12px}
 
-    .panel{background:#fafafa; border:1px solid #e6e8ee; border-radius:12px; padding:14px; margin-bottom:16px}
-    .row{display:grid; gap:10px}
-    .row.cols-2{grid-template-columns:1fr 1fr}
-    .row.cols-3{grid-template-columns:1fr 1fr 1fr}
-    .label{font-size:12px; color:#52667a; font-weight:600; margin-bottom:6px}
-    .input{width:100%; padding:10px 12px; border:1px solid #d7dbe3; border-radius:10px; font-weight:600}
+    .panel{background:var(--panel);border:1px solid #e6e8ee;border-radius:12px;padding:14px;margin-bottom:16px}
+    .row{display:grid;gap:10px}.row.cols-2{grid-template-columns:1fr 1fr}
+    .label{font-size:12px;color:#52667a;font-weight:600;margin-bottom:6px}
+    .input{width:100%;padding:10px 12px;border:1px solid #d7dbe3;border-radius:10px;font-weight:600}
+    .btn{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border-radius:10px;background:var(--bar-1);color:#fff;border:0;font-weight:700;cursor:pointer;box-shadow:0 6px 16px rgba(0,91,150,.25)}
+    .remove{background:transparent;border:0;color:#e11d48;font-size:22px;cursor:pointer}
+    .task-name-chip{width:100%;border:0;border-radius:8px;padding:8px 10px;color:#fff;font-weight:700;text-shadow:0 1px 1px rgba(0,0,0,.4)}
+    .task-hrs{width:100%;text-align:center;padding:8px 10px;border:1px solid #d7dbe3;border-radius:8px}
 
-    .btn{display:inline-flex; align-items:center; gap:8px; padding:10px 14px; border-radius:10px; background:var(--ionix-blue); color:#fff; border:0; font-weight:700; cursor:pointer; box-shadow:0 6px 16px rgba(0,91,150,.25)}
-    .btn.secondary{background:var(--ionix-blue-light)}
-    .btn.danger{background:#e11d48}
-    .muted{color:#6b7b8c; font-size:12px}
+    table{width:100%;border-collapse:collapse}
+    thead th{font-size:12px;color:#5b6b7c;background:#eef4f8;text-align:left;padding:8px 10px;border-bottom:2px solid var(--bar-1)}
+    tbody td{padding:8px 10px;border-bottom:1px solid #edf1f5}
 
-    /* Tabla de tareas */
-    table{width:100%; border-collapse:collapse;}
-    thead th{font-size:12px; color:#5b6b7c; background:#eef4f8; text-align:left; padding:8px 10px; border-bottom:2px solid var(--ionix-blue)}
-    tbody td{padding:8px 10px; border-bottom:1px solid #edf1f5;}
-    tbody tr:hover{background:#f6f9fc}
-    .task-name{width:100%; border:0; border-radius:8px; padding:8px 10px; color:#fff; font-weight:700; text-shadow:0 1px 1px rgba(0,0,0,.4)}
-    .task-hrs{width:100%; text-align:center; padding:8px 10px; border:1px solid #d7dbe3; border-radius:8px}
-    .remove{background:transparent; border:0; color:#e11d48; font-size:22px; cursor:pointer}
-
-    /* Gantt */
-    #gantt-chart{display:grid; grid-template-columns:250px repeat(1,1fr); border:1px solid #e0e0e0; border-radius:12px; overflow:hidden; position:relative}
-    #taskHeader,#timelineContainer{background:#e6f0f4; font-weight:800; padding:8px 16px; border-bottom:2px solid var(--ionix-blue); color:#1f364d; height:50px; display:flex; align-items:center; justify-content:center}
-    #taskHeader{grid-column:1; border-right:1px solid #d1e4eb}
-    #timelineContainer{grid-column:2 / -1; padding:0}
-    #timelineLabels{display:grid; grid-template-columns:repeat(1,1fr); width:100%; height:100%}
-    .timeline-label{display:flex; align-items:center; justify-content:center; font-size:14px; border-right:1px solid var(--grid-border)}
+    /* ======= Gantt ======= */
+    #gantt-chart{display:grid;grid-template-columns:250px repeat(1,1fr);border:1px solid #e0e0e0;border-radius:12px;overflow:hidden;position:relative}
+    #taskHeader,#timelineContainer{background:#e6f0f4;font-weight:800;padding:8px 16px;border-bottom:2px solid var(--bar-1);color:var(--ink);height:50px;display:flex;align-items:center;justify-content:center}
+    #taskHeader{grid-column:1;border-right:1px solid #d1e4eb}
+    #timelineContainer{grid-column:2 / -1;padding:0}
+    #timelineLabels{display:grid;grid-template-columns:repeat(1,1fr);width:100%;height:100%}
+    .timeline-label{display:flex;align-items:center;justify-content:center;font-size:14px;border-right:1px solid var(--grid-border)}
     .timeline-label:last-child{border-right:0}
 
-    .task-cell{grid-column:1; padding:8px 16px; background:#f8f8f8; border-right:1px solid #e0e0e0; border-bottom:1px solid #e0e0e0; display:flex; align-items:center; height:40px}
-    .bar-row{position:relative; height:40px; border-bottom:1px solid #e0e0e0}
-    .bar-cell-divider{height:40px; border-right:1px solid var(--grid-border)}
-    .bar-cell-divider:last-child{border-right:0}
+    .task-cell{grid-column:1;padding:8px 16px;background:#f8f8f8;border-right:1px solid #e0e0e0;border-bottom:1px solid #e0e0e0;display:flex;align-items:center;height:40px}
+    .bar-row{position:relative;height:40px;border-bottom:1px solid #e0e0e0}
+    .grid-overlay{position:absolute;inset:0;display:grid;z-index:5}
+    .bar-cell-divider{height:40px;border-right:1px solid var(--grid-border)}
 
-    .task-bar-segment{position:absolute; top:15%; height:70%; border-radius:6px; display:flex; align-items:center; justify-content:center; padding:0 6px; color:#fff; font-size:11px; font-weight:800; box-shadow:0 6px 14px rgba(0,0,0,.18)}
+    .task-bar-segment{position:absolute;top:15%;height:70%;border-radius:6px;display:flex;align-items:center;justify-content:center;padding:0 6px;color:#fff;font-size:11px;font-weight:800;box-shadow:0 6px 14px rgba(0,0,0,.18);white-space:nowrap;z-index:20;pointer-events:auto;cursor:pointer}
+    .bg-bar-1{background:var(--bar-1)}.bg-bar-2{background:var(--bar-2)}.bg-bar-3{background:var(--bar-3)}.bg-bar-4{background:var(--bar-4)}.bg-bar-5{background:var(--bar-5)}.bg-bar-6{background:var(--bar-6)}.bg-bar-7{background:var(--bar-7)}
 
-    #goLiveLineContainer{position:absolute; top:50px; bottom:0; left:250px; width:calc(100% - 250px); pointer-events:none; z-index:20}
+    #goLiveLineContainer{position:absolute;top:50px;bottom:0;left:250px;width:calc(100% - 250px);pointer-events:none;z-index:30}
     #goLiveLineContainer>div{pointer-events:auto}
-    .go-live-line{position:absolute; top:0; bottom:0; width:3px; background:var(--green); border-radius:999px; transform:translateX(-50%); cursor:grab}
-    .go-live-line:hover{width:5px}
-    .go-live-label{position:absolute; top:-2px; left:50%; transform:translate(-50%,-100%); background:var(--green); color:#fff; font-size:10px; font-weight:800; padding:2px 6px; border-radius:4px; white-space:nowrap}
+    .go-live-line{position:absolute;top:0;bottom:0;width:3px;background:var(--green);border-radius:999px;transform:translateX(-50%);cursor:grab}
+    .go-live-label{position:absolute;top:-2px;left:50%;transform:translate(-50%,-100%);background:var(--green);color:#fff;font-size:10px;font-weight:800;padding:2px 6px;border-radius:4px;white-space:nowrap}
 
-    /* Colores Ionix */
-    .bg-ionix-blue{background:var(--ionix-blue)}
-    .bg-ionix-light-blue{background:var(--ionix-blue-light)}
-    .bg-ionix-gray-mid{background:var(--ionix-gray-mid)}
-    .bg-ionix-gray-dark{background:var(--ionix-gray-dark)}
-    .bg-green-600{background:#059669}
-    .bg-purple-600{background:#7c3aed}
-    .bg-orange-500{background:#f97316}
+    .meta{display:flex;flex-wrap:wrap;gap:10px;font-size:12px;color:#41586c}
+    .badge{background:#eef4f8;border:1px solid #d7e6ef;border-radius:999px;padding:6px 10px;font-weight:700}
 
-    .meta{display:flex; flex-wrap:wrap; gap:14px; font-size:12px; color:#41586c}
-    .badge{background:#eef4f8; border:1px solid #d7e6ef; border-radius:999px; padding:6px 10px; font-weight:700}
+    /* Popover flotante */
+    .color-pop{position:fixed;z-index:1000;background:#fff;border:1px solid #e6e8ee;border-radius:10px;box-shadow:0 10px 25px rgba(16,24,40,.12);padding:12px;display:none;gap:8px;align-items:center}
+    .color-pop input[type="color"]{width:60px;height:38px;border:0;border-radius:8px;cursor:pointer}
+    .color-pop button{padding:6px 10px;border-radius:8px;border:0;font-weight:700;cursor:pointer}
+    .ok{background:var(--green);color:#fff}.cancel{background:#f87171;color:#fff}
+
+    @media(max-width:768px){.wrap{margin:12px;padding:12px}h1{font-size:22px;text-align:center}.row.cols-2{grid-template-columns:1fr}.panel{padding:10px}.timeline-label{font-size:12px}}
   </style>
 </head>
 <body>
   <div class="wrap">
     <h1>Panel de Control y Cronograma</h1>
-
     <div class="panel">
       <h2>Edición de Tareas (Duración en Horas)</h2>
       <div class="row cols-2" style="margin-bottom:10px">
-        <div>
-          <div class="label">Título principal</div>
-          <input id="title" class="input" value="Cronograma del Proyecto" />
-        </div>
-        <div>
-          <div class="label">Subtítulo</div>
-          <input id="subtitle" class="input" value="Flujo de Desarrollo y Recorrido de Horas" />
-        </div>
+        <div><div class="label">Título principal</div><input id="title" class="input" value="Cronograma del Proyecto" /></div>
+        <div><div class="label">Subtítulo</div><input id="subtitle" class="input" value="Flujo de Desarrollo y Recorrido de Horas" /></div>
       </div>
       <div class="meta" id="meta"></div>
     </div>
@@ -101,28 +81,17 @@
     <div class="panel">
       <h2>Detalle de Tareas</h2>
       <div style="overflow-x:auto">
-        <table id="tasks-table">
-          <thead>
-            <tr>
-              <th>Tarea</th>
-              <th style="width:120px; text-align:center">Duración (hh)</th>
-              <th style="width:70px">Acción</th>
-            </tr>
-          </thead>
+        <table>
+          <thead><tr><th>Tarea</th><th style="width:120px;text-align:center">Duración (hh)</th><th style="width:70px">Acción</th></tr></thead>
           <tbody id="tbody"></tbody>
         </table>
       </div>
-      <div style="margin-top:12px; display:flex; justify-content:space-between">
-        <button class="btn" id="addBtn">+ Agregar Tarea</button>
-      </div>
+      <button class="btn" id="addBtn">+ Agregar Tarea</button>
     </div>
 
     <div class="panel" style="padding:0">
-      <div style="padding:16px 16px 0">
-        <h2 id="header"></h2>
-        <div class="muted" id="subtitleView"></div>
-      </div>
-      <div style="padding:16px">
+      <div style="padding:16px 16px 0"><h2 id="header"></h2><div class="muted" id="subtitleView"></div></div>
+      <div style="padding:16px; overflow-x:auto">
         <div id="gantt-chart">
           <div id="taskHeader">Tarea</div>
           <div id="timelineContainer"><div id="timelineLabels"></div></div>
@@ -133,136 +102,95 @@
     </div>
   </div>
 
+  <!-- Popover flotante para elegir color -->
+  <div id="colorPopover" class="color-pop">
+    <input id="picker" type="color" />
+    <button id="ok" class="ok">Aceptar</button>
+    <button id="cancel" class="cancel">Cancelar</button>
+  </div>
+
   <script>
-  // --- CONSTANTES ---
-  const HOURS_PER_DAY = 8; const DAYS_PER_WEEK = 5; const HOURS_PER_WEEK = HOURS_PER_DAY*DAYS_PER_WEEK;
-  const TASK_COLORS=["bg-ionix-blue","bg-ionix-light-blue","bg-ionix-gray-mid","bg-ionix-gray-dark","bg-green-600","bg-purple-600","bg-orange-500"];
-  const colorMap={"bg-ionix-blue":"#005B96","bg-ionix-light-blue":"#3A8EC4","bg-ionix-gray-mid":"#6E7C8E","bg-ionix-gray-dark":"#2C3E50","bg-green-600":"#059669","bg-purple-600":"#7c3aed","bg-orange-500":"#f97316"};
+    // ====== CONSTANTES ======
+    const HOURS_PER_DAY=8, DAYS_PER_WEEK=5, HOURS_PER_WEEK=HOURS_PER_DAY*DAYS_PER_WEEK;
+    const TASK_COLORS=["bg-bar-1","bg-bar-2","bg-bar-3","bg-bar-4","bg-bar-5","bg-bar-6","bg-bar-7"];
 
-  let tasks=[
-    {id:1,name:"Análisis y Diseño",duration:4.9,color:"bg-ionix-blue"},
-    {id:2,name:"Desarrollo",duration:17.0,color:"bg-ionix-light-blue"},
-    {id:3,name:"Pruebas QA",duration:5.0,color:"bg-ionix-gray-mid"},
-    {id:4,name:"PDR, Documentación y Entrega",duration:2.0,color:"bg-ionix-gray-dark"}
-  ];
+    // ====== ESTADO ======
+    let tasks=[
+      {id:1,name:"Análisis y Diseño",duration:4.9,color:"bg-bar-1"},
+      {id:2,name:"Desarrollo",duration:17.0,color:"bg-bar-2"},
+      {id:3,name:"Pruebas QA",duration:5.0,color:"bg-bar-3"},
+      {id:4,name:"PDR, Documentación y Entrega",duration:2.0,color:"bg-bar-4"}
+    ];
+    let goLivePercent=100, isDragging=false;
 
-  // Estado UI
-  let goLivePercent=100; let isDragging=false;
+    // ====== HELPERS ======
+    const $=s=>document.querySelector(s); const rndId=()=>Math.random().toString(36).slice(2);
+    const calcTotalHours=arr=>arr.reduce((s,t)=>s+(parseFloat(t.duration)||0),0);
+    function getTimelineUnit(totalHours){const d=totalHours/HOURS_PER_DAY; let unit,hpu,units; if(d<=DAYS_PER_WEEK){unit='day';hpu=HOURS_PER_DAY;units=Math.max(1,Math.ceil(d));} else{unit='week';hpu=HOURS_PER_WEEK;units=Math.ceil(d/DAYS_PER_WEEK);} return {unit,hoursPerUnit:hpu,totalUnits:units,totalGridHours:units*hpu};}
+    const fmtH=h=>h%1===0? h.toFixed(0):h.toFixed(1);
 
-  // Utilidades
-  const $=sel=>document.querySelector(sel);
-  const $$=sel=>document.querySelectorAll(sel);
-  const rndId=()=>Math.random().toString(36).slice(2);
-  const calcTotalHours=arr=>arr.reduce((s,t)=>s+(parseFloat(t.duration)||0),0);
+    // ====== TABLA ======
+    function renderTasksTable(){const tbody=$('#tbody'); tbody.innerHTML=''; tasks.forEach((t,i)=>{const tr=document.createElement('tr'); const tdN=document.createElement('td'); const tdH=document.createElement('td'); const tdA=document.createElement('td');
+      const chip=document.createElement('input'); chip.value=t.name; chip.className='task-name-chip'; chip.style.background=getComputedStyle(document.documentElement).getPropertyValue(`--bar-${(i%7)+1}`); chip.oninput=e=>{t.name=e.target.value; renderGantt();}; tdN.appendChild(chip);
+      const hrs=document.createElement('input'); hrs.type='number'; hrs.step='0.1'; hrs.min='0'; hrs.value=fmtH(t.duration); hrs.className='task-hrs'; hrs.oninput=e=>{t.duration=parseFloat(e.target.value)||0; renderAll();}; tdH.appendChild(hrs);
+      const btn=document.createElement('button'); btn.className='remove'; btn.innerHTML='&times;'; btn.onclick=()=>{tasks=tasks.filter(x=>x.id!==t.id); renderAll();}; tdA.appendChild(btn);
+      tr.append(tdN,tdH,tdA); tbody.appendChild(tr);});}
 
-  function getTimelineUnit(totalHours){
-    const totalLaboralDays=totalHours/HOURS_PER_DAY; let unit,hoursPerUnit,totalUnits;
-    if(totalLaboralDays<=DAYS_PER_WEEK){unit='day'; hoursPerUnit=HOURS_PER_DAY; totalUnits=Math.max(1,Math.ceil(totalLaboralDays));}
-    else{unit='week'; hoursPerUnit=HOURS_PER_WEEK; totalUnits=Math.ceil(totalLaboralDays/DAYS_PER_WEEK);} 
-    return {unit,hoursPerUnit,totalUnits,totalGridHours:totalUnits*hoursPerUnit};
-  }
+    // ====== GANTT ======
+    function renderGantt(){const totalHours=calcTotalHours(tasks); const {unit,hoursPerUnit,totalUnits,totalGridHours}=getTimelineUnit(totalHours);
+      const totalLaboralDays=(totalHours/HOURS_PER_DAY).toFixed(1); $('#meta').innerHTML=`<span class="badge">Horas Totales: <b>${totalHours.toFixed(1)} hh</b></span><span class="badge">${totalLaboralDays} ${totalLaboralDays==='1.0'?'día':'días'} laborales</span><span class="badge">Unidad de Tiempo: <b>${unit==='day'?'Días':'Semanas'}</b> (${totalUnits} ${unit==='day'?'días':'semanas'})</span>`;
+      const title=$('#title').value; const sub=$('#subtitle').value; $('#header').textContent=`${title} (${totalLaboralDays} ${totalLaboralDays==='1.0'?'día':'días'} / ${totalHours.toFixed(1)} HH)`; $('#subtitleView').textContent=sub;
+      const gantt=$('#gantt-chart'); gantt.style.gridTemplateColumns=`250px repeat(${totalUnits},1fr)`; const labels=$('#timelineLabels'); labels.style.gridTemplateColumns=`repeat(${totalUnits},1fr)`; labels.innerHTML=''; for(let i=0;i<totalUnits;i++){const d=document.createElement('div'); d.className='timeline-label'; d.textContent=`${unit==='day'?'Día':'Semana'} ${i+1}`; labels.appendChild(d);} const body=$('#gantt-body'); body.innerHTML='';
+      let start=0; const calc=tasks.map(t=>{const dur=parseFloat(Number(t.duration).toFixed(1))||0; const obj={...t,startHour:start,endHour:start+dur}; start+=dur; return obj;});
+      calc.forEach((t,i)=>{const cell=document.createElement('div'); cell.className='task-cell'; cell.textContent=t.name; body.appendChild(cell); const row=document.createElement('div'); row.className='bar-row'; row.style.gridColumn=`2 / ${totalUnits+2}`; const seg=document.createElement('div'); seg.className=`task-bar-segment ${t.color}`; const width=(t.duration/totalGridHours)*100; const left=(t.startHour/totalGridHours)*100; seg.style.width=width+'%'; seg.style.left=left+'%'; seg.textContent=`${fmtH(t.duration)} hh`;
+        // click => abrir popover para cambiar color de ESTA barra (variable CSS asociada)
+        seg.addEventListener('click',(ev)=>{openColorPopover(ev.currentTarget, t.color)});
+        row.appendChild(seg);
+        const divs=document.createElement('div'); divs.className='grid-overlay'; divs.style.gridTemplateColumns=`repeat(${totalUnits},1fr)`; for(let j=0;j<totalUnits;j++){const dv=document.createElement('div'); dv.className='bar-cell-divider'; divs.appendChild(dv);} row.appendChild(divs); body.appendChild(row);});
+      // Go Live al final del proyecto si no se arrastra
+      const line=$('#goLiveLine'); const projectEndPercent= totalHours>0 ? Math.min(100, Math.max(0,(totalHours/totalGridHours)*100)) : 0; if(!isDragging){ goLivePercent = projectEndPercent; } line.style.left=goLivePercent+'%';}
 
-  function formatHours(h){return (h%1===0? h.toFixed(0):h.toFixed(1));}
+    function renderAll(){renderTasksTable();renderGantt();}
 
-  // Render de tabla de tareas
-  function renderTasksTable(){
-    const tbody=$('#tbody'); tbody.innerHTML='';
-    tasks.forEach(t=>{
-      const tr=document.createElement('tr');
-      const tdName=document.createElement('td');
-      const tdH=document.createElement('td');
-      const tdAct=document.createElement('td');
-
-      const inp=document.createElement('input');
-      inp.value=t.name; inp.className='task-name'; inp.style.background=(colorMap[t.color]||'#000');
-      inp.oninput=e=>{t.name=e.target.value; renderAll();}
-      tdName.appendChild(inp);
-
-      const hrs=document.createElement('input'); hrs.type='number'; hrs.step='0.1'; hrs.min='0'; hrs.value=formatHours(t.duration); hrs.className='task-hrs';
-      hrs.oninput=e=>{t.duration=parseFloat(e.target.value)||0; renderAll();}
-      tdH.appendChild(hrs); tdH.style.textAlign='center';
-
-      const btn=document.createElement('button'); btn.className='remove'; btn.innerHTML='&times;';
-      btn.onclick=()=>{tasks=tasks.filter(x=>x.id!==t.id); renderAll();}
-      tdAct.appendChild(btn);
-
-      tr.append(tdName,tdH,tdAct); tbody.appendChild(tr);
-    });
-  }
-
-  // Render del Gantt
-  function renderGantt(){
-    const totalHours=calcTotalHours(tasks);
-    const {unit,hoursPerUnit,totalUnits,totalGridHours}=getTimelineUnit(totalHours);
-
-    // header metas
-    const totalLaboralDays=(totalHours/HOURS_PER_DAY).toFixed(1);
-    $('#meta').innerHTML=`<span class="badge">Horas Totales: <b>${totalHours.toFixed(1)} hh</b></span>
-    <span class="badge">${totalLaboralDays} ${totalLaboralDays==='1.0'?'día':'días'} laborales</span>
-    <span class="badge">Unidad de Tiempo: <b>${unit==='day'?'Días':'Semanas'}</b> (${totalUnits} ${unit==='day'?'días':'semanas'})</span>`;
-
-    // título
-    const title=$('#title').value; const sub=$('#subtitle').value;
-    $('#header').textContent=`${title} (${totalLaboralDays} ${totalLaboralDays==='1.0'?'día':'días'} / ${totalHours.toFixed(1)} HH)`;
-    $('#subtitleView').textContent=sub;
-
-    // grid template columns
-    const gantt=$('#gantt-chart'); gantt.style.gridTemplateColumns=`250px repeat(${totalUnits},1fr)`;
-    const labels=$('#timelineLabels'); labels.style.gridTemplateColumns=`repeat(${totalUnits},1fr)`; labels.innerHTML='';
-    for(let i=0;i<totalUnits;i++){
-      const d=document.createElement('div'); d.className='timeline-label'; d.textContent=`${unit==='day'?'Día':'Semana'} ${i+1}`; labels.appendChild(d);
+    // ====== COLOR POPOVER ======
+    const pop=$('#colorPopover'); const picker=$('#picker'); let targetVar=null;
+    function classToVar(barClass){ // "bg-bar-3" => "--bar-3"
+      const m=(barClass||'').match(/bg-bar-(\d+)/); return m?`--bar-${m[1]}`:null;
     }
+    function openColorPopover(el, barClass){
+      targetVar = classToVar(barClass);
+      if(!targetVar) return;
+      const rect=el.getBoundingClientRect();
+      pop.style.display='flex';
+      const left = Math.min(window.innerWidth-210, Math.max(12, rect.left + rect.width/2 - 90));
+      const top  = Math.min(window.scrollY + window.innerHeight-70, rect.top + window.scrollY - 60);
+      pop.style.left= left + 'px';
+      pop.style.top = top + 'px';
+      // Lee la var CSS y conviértela a hex si viene en rgb(a)
+      const raw = getComputedStyle(document.documentElement).getPropertyValue(targetVar).trim();
+      picker.value = raw.startsWith('#')? raw : rgbToHex(raw);
+    }
+    function rgbToHex(rgb){
+      const m = rgb.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i); if(!m) return '#000000';
+      const [r,g,b] = m.slice(1,4).map(Number); return '#' + [r,g,b].map(x=>x.toString(16).padStart(2,'0')).join('');
+    }
+    $('#ok').onclick=()=>{ if(targetVar){ document.documentElement.style.setProperty(targetVar, picker.value); renderAll(); } pop.style.display='none'; };
+    $('#cancel').onclick=()=>{ pop.style.display='none'; };
+    document.addEventListener('keydown',e=>{ if(e.key==='Escape') pop.style.display='none'; });
+    document.addEventListener('click',e=>{ const inside = e.target.closest('#colorPopover') || e.target.closest('.task-bar-segment'); if(!inside) pop.style.display='none'; });
 
-    // cuerpo
-    const body=$('#gantt-body'); body.innerHTML='';
-    // calcular start/end
-    let start=0; const calcTasks=tasks.map(t=>{const dur=parseFloat(Number(t.duration).toFixed(1))||0; const obj={...t,startHour:start,endHour:start+dur}; start+=dur; return obj;});
+    // ====== EVENTOS ======
+    $('#addBtn').onclick=()=>{const idx=tasks.length%TASK_COLORS.length; tasks.push({id:rndId(),name:'Nueva Tarea',duration:8,color:TASK_COLORS[idx]}); renderAll();};
+    $('#title').oninput=$('#subtitle').oninput=()=>renderGantt();
 
-    calcTasks.forEach(t=>{
-      // task cell
-      const cell=document.createElement('div'); cell.className='task-cell'; cell.textContent=t.name; body.appendChild(cell);
-      // bar row container
-      const row=document.createElement('div'); row.className='bar-row'; row.style.gridColumn=`2 / ${totalUnits+2}`;
-      // bar
-      const seg=document.createElement('div'); seg.className=`task-bar-segment ${t.color}`;
-      const width=(t.duration/totalGridHours)*100; const left=(t.startHour/totalGridHours)*100;
-      seg.style.width=width+'%'; seg.style.left=left+'%'; seg.textContent=`${formatHours(t.duration)} hh`;
-      row.appendChild(seg);
-      // vertical dividers
-      const divs=document.createElement('div'); divs.style.cssText=`display:grid; grid-template-columns:repeat(${totalUnits},1fr); position:absolute; inset:0`;
-      for(let i=0;i<totalUnits;i++){const d=document.createElement('div'); d.className='bar-cell-divider'; divs.appendChild(d);} 
-      row.appendChild(divs);
-      body.appendChild(row);
-    });
+    const lineEl=$('#goLiveLine'), container=$('#goLiveLineContainer');
+    lineEl.addEventListener('pointerdown',e=>{isDragging=true; lineEl.setPointerCapture(e.pointerId); lineEl.style.cursor='grabbing';});
+    document.addEventListener('pointerup',()=>{isDragging=false; lineEl.style.cursor='grab';});
+    document.addEventListener('pointermove',e=>{if(!isDragging) return; const rect=container.getBoundingClientRect(); let x=e.clientX-rect.left; x=Math.max(0,Math.min(x,rect.width)); goLivePercent=(x/rect.width)*100; lineEl.style.left=goLivePercent+'%';});
+    lineEl.addEventListener('keydown',e=>{let step=1; if(e.key==='ArrowLeft'){goLivePercent=Math.max(0,goLivePercent-step); renderGantt(); e.preventDefault();} if(e.key==='ArrowRight'){goLivePercent=Math.min(100,goLivePercent+step); renderGantt(); e.preventDefault();}}); lineEl.tabIndex=0;
 
-    // go-live line location
-    const line=$('#goLiveLine');
-    const projectEndPercent= totalHours>0 ? Math.min(100, Math.max(0,(totalHours/totalGridHours)*100)) : 0;
-    if(!isDragging){ goLivePercent = projectEndPercent; }
-    line.style.left= goLivePercent + '%';
-
-    // ancho mínimo del contenedor para pocas columnas
-    gantt.style.minWidth = totalUnits < 5 ? '600px' : (250 + totalUnits*100) + 'px';
-  }
-
-  function renderAll(){ renderTasksTable(); renderGantt(); }
-
-  // Eventos globales
-  $('#addBtn').onclick=()=>{ const idx=tasks.length%TASK_COLORS.length; tasks.push({id:rndId(), name:'Nueva Tarea', duration:8.0, color:TASK_COLORS[idx]}); renderAll(); };
-  $('#title').oninput=$('#subtitle').oninput=()=>renderGantt();
-
-  // Drag Go Live
-  const line=$('#goLiveLine'); const container=$('#goLiveLineContainer');
-  line.addEventListener('pointerdown',e=>{isDragging=true; line.setPointerCapture(e.pointerId); line.style.cursor='grabbing'});
-  document.addEventListener('pointerup',()=>{isDragging=false; line.style.cursor='grab'});
-  document.addEventListener('pointermove',e=>{
-    if(!isDragging) return; const rect=container.getBoundingClientRect(); let x=e.clientX-rect.left; x=Math.max(0,Math.min(x,rect.width)); goLivePercent=(x/rect.width)*100; line.style.left=goLivePercent+'%';
-  });
-  line.addEventListener('keydown',e=>{let step=1; if(e.key==='ArrowLeft'){goLivePercent=Math.max(0,goLivePercent-step); renderGantt(); e.preventDefault();} if(e.key==='ArrowRight'){goLivePercent=Math.min(100,goLivePercent+step); renderGantt(); e.preventDefault();}});
-  line.tabIndex=0;
-
-  // Inicio
-  renderAll();
+    // ====== INICIO ======
+    renderAll();
   </script>
 </body>
 </html>

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Cronograma Ionix — Gantt + Popover de Color</title>
+  <title>Cronograma Ionix — Gantt (colores desde la tabla)</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -46,22 +46,16 @@
     .grid-overlay{position:absolute;inset:0;display:grid;z-index:5}
     .bar-cell-divider{height:40px;border-right:1px solid var(--grid-border)}
 
-    .task-bar-segment{position:absolute;top:15%;height:70%;border-radius:6px;display:flex;align-items:center;justify-content:center;padding:0 6px;color:#fff;font-size:11px;font-weight:800;box-shadow:0 6px 14px rgba(0,0,0,.18);white-space:nowrap;z-index:20;pointer-events:auto;cursor:pointer}
+    .task-bar-segment{position:absolute;top:15%;height:70%;border-radius:6px;display:flex;align-items:center;justify-content:center;padding:0 6px;color:#fff;font-size:11px;font-weight:800;box-shadow:0 6px 14px rgba(0,0,0,.18);white-space:nowrap;z-index:40;pointer-events:none;cursor:default}
     .bg-bar-1{background:var(--bar-1)}.bg-bar-2{background:var(--bar-2)}.bg-bar-3{background:var(--bar-3)}.bg-bar-4{background:var(--bar-4)}.bg-bar-5{background:var(--bar-5)}.bg-bar-6{background:var(--bar-6)}.bg-bar-7{background:var(--bar-7)}
 
     #goLiveLineContainer{position:absolute;top:50px;bottom:0;left:250px;width:calc(100% - 250px);pointer-events:none;z-index:30}
     #goLiveLineContainer>div{pointer-events:auto}
-    .go-live-line{position:absolute;top:0;bottom:0;width:3px;background:var(--green);border-radius:999px;transform:translateX(-50%);cursor:grab}
+    .go-live-line{position:absolute;top:0;bottom:0;width:3px;background:var(--green);border-radius:999px;transform:translateX(-50%);cursor:grab;z-index:50}
     .go-live-label{position:absolute;top:-2px;left:50%;transform:translate(-50%,-100%);background:var(--green);color:#fff;font-size:10px;font-weight:800;padding:2px 6px;border-radius:4px;white-space:nowrap}
 
     .meta{display:flex;flex-wrap:wrap;gap:10px;font-size:12px;color:#41586c}
     .badge{background:#eef4f8;border:1px solid #d7e6ef;border-radius:999px;padding:6px 10px;font-weight:700}
-
-    /* Popover flotante */
-    .color-pop{position:fixed;z-index:1000;background:#fff;border:1px solid #e6e8ee;border-radius:10px;box-shadow:0 10px 25px rgba(16,24,40,.12);padding:12px;display:none;gap:8px;align-items:center}
-    .color-pop input[type="color"]{width:60px;height:38px;border:0;border-radius:8px;cursor:pointer}
-    .color-pop button{padding:6px 10px;border-radius:8px;border:0;font-weight:700;cursor:pointer}
-    .ok{background:var(--green);color:#fff}.cancel{background:#f87171;color:#fff}
 
     @media(max-width:768px){.wrap{margin:12px;padding:12px}h1{font-size:22px;text-align:center}.row.cols-2{grid-template-columns:1fr}.panel{padding:10px}.timeline-label{font-size:12px}}
   </style>
@@ -102,13 +96,6 @@
     </div>
   </div>
 
-  <!-- Popover flotante para elegir color -->
-  <div id="colorPopover" class="color-pop">
-    <input id="picker" type="color" />
-    <button id="ok" class="ok">Aceptar</button>
-    <button id="cancel" class="cancel">Cancelar</button>
-  </div>
-
   <script>
     // ====== CONSTANTES ======
     const HOURS_PER_DAY=8, DAYS_PER_WEEK=5, HOURS_PER_WEEK=HOURS_PER_DAY*DAYS_PER_WEEK;
@@ -128,56 +115,69 @@
     const calcTotalHours=arr=>arr.reduce((s,t)=>s+(parseFloat(t.duration)||0),0);
     function getTimelineUnit(totalHours){const d=totalHours/HOURS_PER_DAY; let unit,hpu,units; if(d<=DAYS_PER_WEEK){unit='day';hpu=HOURS_PER_DAY;units=Math.max(1,Math.ceil(d));} else{unit='week';hpu=HOURS_PER_WEEK;units=Math.ceil(d/DAYS_PER_WEEK);} return {unit,hoursPerUnit:hpu,totalUnits:units,totalGridHours:units*hpu};}
     const fmtH=h=>h%1===0? h.toFixed(0):h.toFixed(1);
+    // Helpers CSS vars
+    const getVar=(n)=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+    const setVar=(n,v)=>document.documentElement.style.setProperty(n,v);
 
     // ====== TABLA ======
-    function renderTasksTable(){const tbody=$('#tbody'); tbody.innerHTML=''; tasks.forEach((t,i)=>{const tr=document.createElement('tr'); const tdN=document.createElement('td'); const tdH=document.createElement('td'); const tdA=document.createElement('td');
-      const chip=document.createElement('input'); chip.value=t.name; chip.className='task-name-chip'; chip.style.background=getComputedStyle(document.documentElement).getPropertyValue(`--bar-${(i%7)+1}`); chip.oninput=e=>{t.name=e.target.value; renderGantt();}; tdN.appendChild(chip);
-      const hrs=document.createElement('input'); hrs.type='number'; hrs.step='0.1'; hrs.min='0'; hrs.value=fmtH(t.duration); hrs.className='task-hrs'; hrs.oninput=e=>{t.duration=parseFloat(e.target.value)||0; renderAll();}; tdH.appendChild(hrs);
-      const btn=document.createElement('button'); btn.className='remove'; btn.innerHTML='&times;'; btn.onclick=()=>{tasks=tasks.filter(x=>x.id!==t.id); renderAll();}; tdA.appendChild(btn);
-      tr.append(tdN,tdH,tdA); tbody.appendChild(tr);});}
+    function renderTasksTable(){
+      const tbody=$('#tbody'); tbody.innerHTML='';
+      tasks.forEach((t,i)=>{
+        const tr=document.createElement('tr');
+        const tdN=document.createElement('td'); const tdH=document.createElement('td'); const tdA=document.createElement('td');
+
+        const wrap=document.createElement('div'); wrap.style.display='flex'; wrap.style.alignItems='center'; wrap.style.gap='10px';
+        const cssVar = `--bar-${(i%7)+1}`;
+        const colorInput=document.createElement('input');
+        colorInput.type='color';
+        const init = getVar(cssVar) || '#005B96';
+        colorInput.value=init.trim().startsWith('#')? init.trim(): '#005B96';
+        colorInput.style.width='38px'; colorInput.style.height='28px'; colorInput.style.border='0'; colorInput.style.borderRadius='6px'; colorInput.style.cursor='pointer';
+
+        const nameInput=document.createElement('input');
+        nameInput.value=t.name; nameInput.className='task-name-chip'; nameInput.style.background=colorInput.value; nameInput.oninput=e=>{t.name=e.target.value; renderGantt();};
+
+        colorInput.oninput=e=>{ setVar(cssVar, e.target.value); nameInput.style.background=e.target.value; renderGantt(); };
+
+        wrap.appendChild(colorInput); wrap.appendChild(nameInput); tdN.appendChild(wrap);
+
+        const hrs=document.createElement('input'); hrs.type='number'; hrs.step='0.1'; hrs.min='0'; hrs.value=fmtH(t.duration); hrs.className='task-hrs'; hrs.oninput=e=>{t.duration=parseFloat(e.target.value)||0; renderAll();}; tdH.appendChild(hrs);
+        const btn=document.createElement('button'); btn.className='remove'; btn.innerHTML='&times;'; btn.onclick=()=>{tasks=tasks.filter(x=>x.id!==t.id); renderAll();}; tdA.appendChild(btn);
+
+        tr.append(tdN,tdH,tdA); tbody.appendChild(tr);
+      });
+    }
 
     // ====== GANTT ======
-    function renderGantt(){const totalHours=calcTotalHours(tasks); const {unit,hoursPerUnit,totalUnits,totalGridHours}=getTimelineUnit(totalHours);
-      const totalLaboralDays=(totalHours/HOURS_PER_DAY).toFixed(1); $('#meta').innerHTML=`<span class="badge">Horas Totales: <b>${totalHours.toFixed(1)} hh</b></span><span class="badge">${totalLaboralDays} ${totalLaboralDays==='1.0'?'día':'días'} laborales</span><span class="badge">Unidad de Tiempo: <b>${unit==='day'?'Días':'Semanas'}</b> (${totalUnits} ${unit==='day'?'días':'semanas'})</span>`;
+    function renderGantt(){
+      const totalHours=calcTotalHours(tasks);
+      const {unit,hoursPerUnit,totalUnits,totalGridHours}=getTimelineUnit(totalHours);
+      const totalLaboralDays=(totalHours/HOURS_PER_DAY).toFixed(1);
+      $('#meta').innerHTML=`<span class="badge">Horas Totales: <b>${totalHours.toFixed(1)} hh</b></span><span class="badge">${totalLaboralDays} ${totalLaboralDays==='1.0'?'día':'días'} laborales</span><span class="badge">Unidad de Tiempo: <b>${unit==='day'?'Días':'Semanas'}</b> (${totalUnits} ${unit==='day'?'días':'semanas'})</span>`;
+
       const title=$('#title').value; const sub=$('#subtitle').value; $('#header').textContent=`${title} (${totalLaboralDays} ${totalLaboralDays==='1.0'?'día':'días'} / ${totalHours.toFixed(1)} HH)`; $('#subtitleView').textContent=sub;
-      const gantt=$('#gantt-chart'); gantt.style.gridTemplateColumns=`250px repeat(${totalUnits},1fr)`; const labels=$('#timelineLabels'); labels.style.gridTemplateColumns=`repeat(${totalUnits},1fr)`; labels.innerHTML=''; for(let i=0;i<totalUnits;i++){const d=document.createElement('div'); d.className='timeline-label'; d.textContent=`${unit==='day'?'Día':'Semana'} ${i+1}`; labels.appendChild(d);} const body=$('#gantt-body'); body.innerHTML='';
+
+      const gantt=$('#gantt-chart'); gantt.style.gridTemplateColumns=`250px repeat(${totalUnits},1fr)`;
+      const labels=$('#timelineLabels'); labels.style.gridTemplateColumns=`repeat(${totalUnits},1fr)`; labels.innerHTML='';
+      for(let i=0;i<totalUnits;i++){const d=document.createElement('div'); d.className='timeline-label'; d.textContent=`${unit==='day'?'Día':'Semana'} ${i+1}`; labels.appendChild(d);} 
+
+      const body=$('#gantt-body'); body.innerHTML='';
       let start=0; const calc=tasks.map(t=>{const dur=parseFloat(Number(t.duration).toFixed(1))||0; const obj={...t,startHour:start,endHour:start+dur}; start+=dur; return obj;});
-      calc.forEach((t,i)=>{const cell=document.createElement('div'); cell.className='task-cell'; cell.textContent=t.name; body.appendChild(cell); const row=document.createElement('div'); row.className='bar-row'; row.style.gridColumn=`2 / ${totalUnits+2}`; const seg=document.createElement('div'); seg.className=`task-bar-segment ${t.color}`; const width=(t.duration/totalGridHours)*100; const left=(t.startHour/totalGridHours)*100; seg.style.width=width+'%'; seg.style.left=left+'%'; seg.textContent=`${fmtH(t.duration)} hh`;
-        // click => abrir popover para cambiar color de ESTA barra (variable CSS asociada)
-        seg.addEventListener('click',(ev)=>{openColorPopover(ev.currentTarget, t.color)});
+
+      calc.forEach((t,i)=>{
+        const cell=document.createElement('div'); cell.className='task-cell'; cell.textContent=t.name; body.appendChild(cell);
+        const row=document.createElement('div'); row.className='bar-row'; row.style.gridColumn=`2 / ${totalUnits+2}`;
+        const seg=document.createElement('div'); seg.className=`task-bar-segment ${t.color}`; const width=(t.duration/totalGridHours)*100; const left=(t.startHour/totalGridHours)*100; seg.style.width=width+'%'; seg.style.left=left+'%'; seg.textContent=`${fmtH(t.duration)} hh`;
         row.appendChild(seg);
-        const divs=document.createElement('div'); divs.className='grid-overlay'; divs.style.gridTemplateColumns=`repeat(${totalUnits},1fr)`; for(let j=0;j<totalUnits;j++){const dv=document.createElement('div'); dv.className='bar-cell-divider'; divs.appendChild(dv);} row.appendChild(divs); body.appendChild(row);});
+        const divs=document.createElement('div'); divs.className='grid-overlay'; divs.style.gridTemplateColumns=`repeat(${totalUnits},1fr)`; for(let j=0;j<totalUnits;j++){const dv=document.createElement('div'); dv.className='bar-cell-divider'; divs.appendChild(dv);} row.appendChild(divs);
+        body.appendChild(row);
+      });
+
       // Go Live al final del proyecto si no se arrastra
-      const line=$('#goLiveLine'); const projectEndPercent= totalHours>0 ? Math.min(100, Math.max(0,(totalHours/totalGridHours)*100)) : 0; if(!isDragging){ goLivePercent = projectEndPercent; } line.style.left=goLivePercent+'%';}
+      const line=$('#goLiveLine'); const projectEndPercent= totalHours>0 ? Math.min(100, Math.max(0,(totalHours/totalGridHours)*100)) : 0; if(!isDragging){ goLivePercent = projectEndPercent; } line.style.left=goLivePercent+'%';
+    }
 
     function renderAll(){renderTasksTable();renderGantt();}
-
-    // ====== COLOR POPOVER ======
-    const pop=$('#colorPopover'); const picker=$('#picker'); let targetVar=null;
-    function classToVar(barClass){ // "bg-bar-3" => "--bar-3"
-      const m=(barClass||'').match(/bg-bar-(\d+)/); return m?`--bar-${m[1]}`:null;
-    }
-    function openColorPopover(el, barClass){
-      targetVar = classToVar(barClass);
-      if(!targetVar) return;
-      const rect=el.getBoundingClientRect();
-      pop.style.display='flex';
-      const left = Math.min(window.innerWidth-210, Math.max(12, rect.left + rect.width/2 - 90));
-      const top  = Math.min(window.scrollY + window.innerHeight-70, rect.top + window.scrollY - 60);
-      pop.style.left= left + 'px';
-      pop.style.top = top + 'px';
-      // Lee la var CSS y conviértela a hex si viene en rgb(a)
-      const raw = getComputedStyle(document.documentElement).getPropertyValue(targetVar).trim();
-      picker.value = raw.startsWith('#')? raw : rgbToHex(raw);
-    }
-    function rgbToHex(rgb){
-      const m = rgb.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i); if(!m) return '#000000';
-      const [r,g,b] = m.slice(1,4).map(Number); return '#' + [r,g,b].map(x=>x.toString(16).padStart(2,'0')).join('');
-    }
-    $('#ok').onclick=()=>{ if(targetVar){ document.documentElement.style.setProperty(targetVar, picker.value); renderAll(); } pop.style.display='none'; };
-    $('#cancel').onclick=()=>{ pop.style.display='none'; };
-    document.addEventListener('keydown',e=>{ if(e.key==='Escape') pop.style.display='none'; });
-    document.addEventListener('click',e=>{ const inside = e.target.closest('#colorPopover') || e.target.closest('.task-bar-segment'); if(!inside) pop.style.display='none'; });
 
     // ====== EVENTOS ======
     $('#addBtn').onclick=()=>{const idx=tasks.length%TASK_COLORS.length; tasks.push({id:rndId(),name:'Nueva Tarea',duration:8,color:TASK_COLORS[idx]}); renderAll();};
@@ -191,6 +191,33 @@
 
     // ====== INICIO ======
     renderAll();
+
+    // ====== PRUEBAS AUTOMÁTICAS (básicas) ======
+    (function runTests(){
+      try{
+        console.log('%c[TEST] Inicio de pruebas','color: #2563eb');
+        // 1. No deben existir los elementos del popover antiguo
+        console.assert(!document.querySelector('#ok') && !document.querySelector('#colorPopover'), 'No debe existir popover antiguo (#ok/#colorPopover)');
+        // 2. Deben existir tantas entradas de color como tareas
+        const colorPickers = () => Array.from(document.querySelectorAll('tbody input[type="color"]'));
+        console.assert(colorPickers().length === tasks.length, 'Cantidad de color pickers debe igualar tareas');
+        // 3. Cambiar el primer color actualiza la variable CSS y re-renderiza sin errores
+        if(colorPickers().length){
+          const cssVar = '--bar-1';
+          const before = getVar(cssVar);
+          colorPickers()[0].value = '#1e90ff';
+          colorPickers()[0].dispatchEvent(new Event('input', {bubbles:true}));
+          const after = getVar(cssVar);
+          console.assert(before !== after, 'La variable CSS debería actualizarse al cambiar el picker');
+        }
+        // 4. Debe haber tantas barras en el Gantt como tareas
+        console.assert(document.querySelectorAll('.task-bar-segment').length === tasks.length, 'El gantt debe renderizar una barra por tarea');
+        console.log('%c[TEST] OK','color: #16a34a');
+      }catch(e){
+        console.error('[TEST] Falló:', e);
+      }
+    })();
   </script>
 </body>
 </html>
+

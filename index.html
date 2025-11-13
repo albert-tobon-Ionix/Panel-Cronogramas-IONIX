@@ -3,13 +3,12 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Cronograma Ionix — Gantt (colores desde la tabla)</title>
+  <title>Cronograma Ionix — Gantt</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root{
-      /* Paleta parametrizable */
       --bar-1:#005B96; --bar-2:#3A8EC4; --bar-3:#6E7C8E; --bar-4:#2C3E50; --bar-5:#059669; --bar-6:#7c3aed; --bar-7:#f97316;
       --green:#10b981; --grid-border:#d1e4eb; --row-border:#e0e0e0; --panel:#fafafa; --ink:#1f364d;
     }
@@ -46,24 +45,7 @@
     .grid-overlay{position:absolute;inset:0;display:grid;z-index:5}
     .bar-cell-divider{height:40px;border-right:1px solid var(--grid-border)}
 
-    .task-bar-segment{
-      position:absolute;
-      top:15%;
-      height:70%;
-      border-radius:6px;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      padding:0 6px;
-      color:#fff;
-      font-size:11px;
-      font-weight:800;
-      box-shadow:0 6px 14px rgba(0,0,0,.18);
-      white-space:nowrap;
-      z-index:40;
-      pointer-events:auto;
-      cursor:grab;
-    }
+    .task-bar-segment{position:absolute;top:15%;height:70%;border-radius:6px;display:flex;align-items:center;justify-content:center;padding:0 6px;color:#fff;font-size:11px;font-weight:800;box-shadow:0 6px 14px rgba(0,0,0,.18);white-space:nowrap;z-index:40;pointer-events:auto;cursor:grab}
     .bg-bar-1{background:var(--bar-1)}.bg-bar-2{background:var(--bar-2)}.bg-bar-3{background:var(--bar-3)}.bg-bar-4{background:var(--bar-4)}.bg-bar-5{background:var(--bar-5)}.bg-bar-6{background:var(--bar-6)}.bg-bar-7{background:var(--bar-7)}
 
     #goLiveLineContainer{position:absolute;top:50px;bottom:0;left:250px;width:calc(100% - 250px);pointer-events:none;z-index:30}
@@ -119,22 +101,21 @@
     const TASK_COLORS=["bg-bar-1","bg-bar-2","bg-bar-3","bg-bar-4","bg-bar-5","bg-bar-6","bg-bar-7"];
 
     // ====== ESTADO ======
+    // startHour fijo por fila: así la barra nunca cambia de actividad
     let tasks=[
-      {id:1,name:"Análisis y Diseño",duration:4.9,color:"bg-bar-1"},
-      {id:2,name:"Desarrollo",duration:17.0,color:"bg-bar-2"},
-      {id:3,name:"Pruebas QA",duration:5.0,color:"bg-bar-3"},
-      {id:4,name:"PDR, Documentación y Entrega",duration:2.0,color:"bg-bar-4"}
+      {id:1,name:"Análisis y Diseño",duration:4.9,color:"bg-bar-1",startHour:0},
+      {id:2,name:"Desarrollo",duration:17.0,color:"bg-bar-2",startHour:4.9},
+      {id:3,name:"Pruebas QA",duration:5.0,color:"bg-bar-3",startHour:21.9},
+      {id:4,name:"PDR, Documentación y Entrega",duration:2.0,color:"bg-bar-4",startHour:26.9}
     ];
     let goLivePercent=100, isDragging=false;
 
-    // inicializar posiciones secuenciales
-    (function initStarts(){
-      let s = 0;
-      tasks.forEach(t => {
-        t._startHour = s;
-        s += t.duration;
-      });
-    })();
+    // Drag de barras
+    let draggingTaskId=null;
+    let draggingOffsetHours=0;
+    let draggingTotalGridHours=0;
+    let draggingTimelineRect=null;
+    let draggingTaskDuration=0;
 
     // ====== HELPERS ======
     const $=s=>document.querySelector(s); const rndId=()=>Math.random().toString(36).slice(2);
@@ -149,10 +130,6 @@
     const fmtH=h=>h%1===0? h.toFixed(0):h.toFixed(1);
     const getVar=(n)=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
     const setVar=(n,v)=>document.documentElement.style.setProperty(n,v);
-
-    function reorderTasksByStart() {
-      tasks.sort((a,b)=>(a._startHour||0)-(b._startHour||0));
-    }
 
     // ====== TABLA ======
     function renderTasksTable(){
@@ -182,14 +159,17 @@
         hrs.step='0.1';
         hrs.min='0';
         hrs.inputMode='decimal';
-        hrs.value=t.duration;
+        hrs.value = t.duration;
         hrs.className='task-hrs';
+
+        // IMPORTANTE: solo volvemos a dibujar el Gantt, no la tabla
         hrs.oninput=e=>{
-          const val=e.target.value;
-          if(val==="" || val===".") return; // permite escribir decimales
-          t.duration=parseFloat(val)||0;
-          renderAll();
+          let val=e.target.value.replace(',','.');
+          if(val==="" || val==="."){ t.duration = 0; renderGantt(); return; }
+          const num=parseFloat(val);
+          if(!isNaN(num)){ t.duration=num; renderGantt(); }
         };
+
         tdH.appendChild(hrs);
 
         const btn=document.createElement('button'); btn.className='remove'; btn.innerHTML='&times;';
@@ -202,24 +182,12 @@
 
     // ====== GANTT ======
     function renderGantt(){
-      // calcular totales
       const totalHours=calcTotalHours(tasks);
-
-      const calc = tasks.map(t=>{
-        const dur=parseFloat(Number(t.duration).toFixed(2))||0;
-        const start=(typeof t._startHour==="number") ? t._startHour : 0;
-        return {...t,duration:dur,startHour:start,endHour:start+dur};
-      });
-
-      const projectEndHour = calc.length ? Math.max(...calc.map(t=>t.endHour)) : 0;
-      const hoursForTimeline = Math.max(projectEndHour, totalHours);
-      const {unit,hoursPerUnit,totalUnits,totalGridHours}=getTimelineUnit(hoursForTimeline);
+      const {unit,hoursPerUnit,totalUnits,totalGridHours}=getTimelineUnit(totalHours);
+      draggingTotalGridHours = totalGridHours;
 
       const totalLaboralDays=(totalHours/HOURS_PER_DAY).toFixed(1);
-      $('#meta').innerHTML=
-        `<span class="badge">Horas Totales: <b>${totalHours.toFixed(1)} hh</b></span>`+
-        `<span class="badge">${totalLaboralDays} ${totalLaboralDays==='1.0'?'día':'días'} laborales</span>`+
-        `<span class="badge">Unidad de Tiempo: <b>${unit==='day'?'Días':'Semanas'}</b> (${totalUnits} ${unit==='day'?'días':'semanas'})</span>`;
+      $('#meta').innerHTML=`<span class="badge">Horas Totales: <b>${totalHours.toFixed(1)} hh</b></span><span class="badge">${totalLaboralDays} ${totalLaboralDays==='1.0'?'día':'días'} laborales</span><span class="badge">Unidad de Tiempo: <b>${unit==='day'?'Días':'Semanas'}</b> (${totalUnits} ${unit==='day'?'días':'semanas'})</span>`;
 
       const title=$('#title').value; const sub=$('#subtitle').value;
       $('#header').textContent=`${title} (${totalLaboralDays} ${totalLaboralDays==='1.0'?'día':'días'} / ${totalHours.toFixed(1)} HH)`;
@@ -227,8 +195,10 @@
 
       const gantt=$('#gantt-chart');
       gantt.style.gridTemplateColumns=`250px repeat(${totalUnits},1fr)`;
+
       const labels=$('#timelineLabels');
-      labels.style.gridTemplateColumns=`repeat(${totalUnits},1fr)`; labels.innerHTML='';
+      labels.style.gridTemplateColumns=`repeat(${totalUnits},1fr)`;
+      labels.innerHTML='';
       for(let i=0;i<totalUnits;i++){
         const d=document.createElement('div');
         d.className='timeline-label';
@@ -237,10 +207,22 @@
       }
 
       const body=$('#gantt-body'); body.innerHTML='';
-      calc.forEach((t)=>{
-        const cell=document.createElement('div'); cell.className='task-cell'; cell.textContent=t.name; body.appendChild(cell);
 
-        const row=document.createElement('div'); row.className='bar-row'; row.style.gridColumn=`2 / ${totalUnits+2}`;
+      const calc=tasks.map(t=>{
+        const dur=parseFloat(Number(t.duration).toFixed(2)) || 0;
+        const start = (typeof t.startHour === 'number' && !Number.isNaN(t.startHour)) ? t.startHour : 0;
+        return {...t,duration:dur,startHour:start,endHour:start+dur};
+      });
+
+      calc.forEach((t)=>{
+        const cell=document.createElement('div');
+        cell.className='task-cell';
+        cell.textContent=t.name;
+        body.appendChild(cell);
+
+        const row=document.createElement('div');
+        row.className='bar-row';
+        row.style.gridColumn=`2 / ${totalUnits+2}`;
 
         const seg=document.createElement('div');
         seg.className=`task-bar-segment ${t.color}`;
@@ -248,42 +230,23 @@
         const left=(t.startHour/totalGridHours)*100;
         seg.style.width=width+'%';
         seg.style.left=left+'%';
-        // sin texto de horas dentro de la barra
+        // SIN texto en la barra
+        seg.textContent = "";
 
-        // === Drag & drop de barras ===
-        seg.draggable = true;
+        // Drag horizontal de la barra (dentro de su misma fila)
+        seg.addEventListener('pointerdown', (e)=>{
+          draggingTaskId = t.id;
+          draggingTaskDuration = t.duration;
+          const timelineRect = $('#goLiveLineContainer').getBoundingClientRect();
+          draggingTimelineRect = timelineRect;
 
-        seg.addEventListener("dragstart",(e)=>{
-          e.dataTransfer.setData("task-id", t.id);
-          e.dataTransfer.effectAllowed = "move";
-        });
+          const barLeftPx = timelineRect.left + (t.startHour/totalGridHours)*timelineRect.width;
+          const pointerX = e.clientX;
+          const offsetPx = pointerX - barLeftPx;
+          draggingOffsetHours = (offsetPx / timelineRect.width) * totalGridHours;
 
-        row.addEventListener("dragover",(e)=>{
+          seg.setPointerCapture(e.pointerId);
           e.preventDefault();
-        });
-
-        row.addEventListener("drop",(e)=>{
-          e.preventDefault();
-          const id=e.dataTransfer.getData("task-id");
-          const task=tasks.find(x=>String(x.id)===String(id));
-          if(!task) return;
-
-          const rect=row.getBoundingClientRect();
-          let x=e.clientX-rect.left;
-          x=Math.max(0,Math.min(x,rect.width));
-          let percent=x/rect.width;
-          let newStart=percent*totalGridHours;
-
-          const dur=parseFloat(task.duration)||0;
-          if(totalGridHours>dur){
-            newStart=Math.max(0,Math.min(newStart,totalGridHours-dur));
-          }else{
-            newStart=0;
-          }
-
-          task._startHour=newStart;
-          reorderTasksByStart();
-          renderAll();
         });
 
         row.appendChild(seg);
@@ -292,15 +255,23 @@
         divs.className='grid-overlay';
         divs.style.gridTemplateColumns=`repeat(${totalUnits},1fr)`;
         for(let j=0;j<totalUnits;j++){
-          const dv=document.createElement('div'); dv.className='bar-cell-divider'; divs.appendChild(dv);
+          const dv=document.createElement('div');
+          dv.className='bar-cell-divider';
+          divs.appendChild(dv);
         }
         row.appendChild(divs);
+
         body.appendChild(row);
       });
 
-      // Go Live al final del proyecto si no se arrastra
+      // Fin real del proyecto (máximo endHour)
+      let projectEndHours = 0;
+      calc.forEach(t=>{
+        if(t.endHour > projectEndHours) projectEndHours = t.endHour;
+      });
+
       const line=$('#goLiveLine');
-      const projectEndPercent = totalGridHours>0 ? Math.min(100, Math.max(0,(projectEndHour/totalGridHours)*100)) : 0;
+      const projectEndPercent = projectEndHours>0 ? Math.min(100, Math.max(0,(projectEndHours/totalGridHours)*100)) : 0;
       if(!isDragging){ goLivePercent = projectEndPercent; }
       line.style.left=goLivePercent+'%';
     }
@@ -310,38 +281,71 @@
     // ====== EVENTOS ======
     $('#addBtn').onclick=()=>{
       const idx=tasks.length%TASK_COLORS.length;
-      // colocar nueva tarea al final del proyecto
-      let lastEnd=0;
-      tasks.forEach(t=>{
-        const s=t._startHour||0;
-        const d=parseFloat(t.duration)||0;
-        lastEnd=Math.max(lastEnd,s+d);
-      });
-      tasks.push({id:rndId(),name:'Nueva Tarea',duration:8,color:TASK_COLORS[idx],_startHour:lastEnd});
+      const maxEnd = tasks.reduce((m,t)=>Math.max(m,(t.startHour||0)+(parseFloat(t.duration)||0)),0);
+      tasks.push({id:rndId(),name:'Nueva Tarea',duration:8,color:TASK_COLORS[idx],startHour:maxEnd});
       renderAll();
     };
     $('#title').oninput=$('#subtitle').oninput=()=>renderGantt();
 
+    // Go Live
     const lineEl=$('#goLiveLine'), container=$('#goLiveLineContainer');
-    lineEl.addEventListener('pointerdown',e=>{isDragging=true; lineEl.setPointerCapture(e.pointerId); lineEl.style.cursor='grabbing';});
-    document.addEventListener('pointerup',()=>{isDragging=false; lineEl.style.cursor='grab';});
-    document.addEventListener('pointermove',e=>{
-      if(!isDragging) return;
-      const rect=container.getBoundingClientRect();
-      let x=e.clientX-rect.left;
-      x=Math.max(0,Math.min(x,rect.width));
-      goLivePercent=(x/rect.width)*100;
-      lineEl.style.left=goLivePercent+'%';
+    lineEl.addEventListener('pointerdown',e=>{
+      isDragging=true;
+      lineEl.setPointerCapture(e.pointerId);
+      lineEl.style.cursor='grabbing';
     });
+
+    document.addEventListener('pointerup',()=>{
+      if(isDragging){
+        isDragging=false;
+        lineEl.style.cursor='grab';
+      }
+      if(draggingTaskId){
+        draggingTaskId=null;
+        draggingTimelineRect=null;
+      }
+    });
+
+    document.addEventListener('pointermove',e=>{
+      // mover GO LIVE
+      if(isDragging){
+        const rect=container.getBoundingClientRect();
+        let x=e.clientX-rect.left;
+        x=Math.max(0,Math.min(x,rect.width));
+        goLivePercent=(x/rect.width)*100;
+        lineEl.style.left=goLivePercent+'%';
+      }
+
+      // mover barras
+      if(draggingTaskId && draggingTimelineRect){
+        const rect = draggingTimelineRect;
+        let x = e.clientX - rect.left;
+        x = Math.max(0, Math.min(x, rect.width));
+        let startHour = (x/rect.width)*draggingTotalGridHours - draggingOffsetHours;
+
+        const maxStart = Math.max(0, draggingTotalGridHours - draggingTaskDuration);
+        if(startHour < 0) startHour = 0;
+        if(startHour > maxStart) startHour = maxStart;
+
+        const task = tasks.find(t=>t.id===draggingTaskId);
+        if(task){
+          task.startHour = startHour;
+          renderGantt(); // solo el gráfico, filas intactas
+        }
+      }
+    });
+
     lineEl.addEventListener('keydown',e=>{
       let step=1;
       if(e.key==='ArrowLeft'){
         goLivePercent=Math.max(0,goLivePercent-step);
-        renderGantt(); e.preventDefault();
+        renderGantt();
+        e.preventDefault();
       }
       if(e.key==='ArrowRight'){
         goLivePercent=Math.min(100,goLivePercent+step);
-        renderGantt(); e.preventDefault();
+        renderGantt();
+        e.preventDefault();
       }
     });
     lineEl.tabIndex=0;
@@ -353,12 +357,9 @@
     (function runTests(){
       try{
         console.log('%c[TEST] Inicio de pruebas','color: #2563eb');
-        // 1. No deben existir los elementos del popover antiguo
         console.assert(!document.querySelector('#ok') && !document.querySelector('#colorPopover'), 'No debe existir popover antiguo (#ok/#colorPopover)');
-        // 2. Deben existir tantas entradas de color como tareas
         const colorPickers = () => Array.from(document.querySelectorAll('tbody input[type="color"]'));
         console.assert(colorPickers().length === tasks.length, 'Cantidad de color pickers debe igualar tareas');
-        // 3. Cambiar el primer color actualiza la variable CSS y re-renderiza sin errores
         if(colorPickers().length){
           const cssVar = '--bar-1';
           const before = getVar(cssVar);
@@ -367,7 +368,6 @@
           const after = getVar(cssVar);
           console.assert(before !== after, 'La variable CSS debería actualizarse al cambiar el picker');
         }
-        // 4. Debe haber tantas barras en el Gantt como tareas
         console.assert(document.querySelectorAll('.task-bar-segment').length === tasks.length, 'El gantt debe renderizar una barra por tarea');
         console.log('%c[TEST] OK','color: #16a34a');
       }catch(e){

@@ -56,6 +56,9 @@
     .meta{display:flex;flex-wrap:wrap;gap:10px;font-size:12px;color:#41586c}
     .badge{background:#eef4f8;border:1px solid #d7e6ef;border-radius:999px;padding:6px 10px;font-weight:700}
 
+    .meta-toggles{display:flex;flex-wrap:wrap;gap:12px;margin-top:10px;font-size:12px;color:#41586c}
+    .meta-toggles label{display:flex;align-items:center;gap:6px;cursor:pointer}
+
     @media(max-width:768px){.wrap{margin:12px;padding:12px}h1{font-size:22px;text-align:center}.row.cols-2{grid-template-columns:1fr}.panel{padding:10px}.timeline-label{font-size:12px}}
   </style>
 </head>
@@ -69,6 +72,12 @@
         <div><div class="label">Subtítulo</div><input id="subtitle" class="input" value="Flujo de Desarrollo y Recorrido de Horas" /></div>
       </div>
       <div class="meta" id="meta"></div>
+
+      <!-- NUEVOS CHECKS PARA MOSTRAR / OCULTAR DÍAS Y HH EN EL TÍTULO -->
+      <div class="meta-toggles">
+        <label><input type="checkbox" id="showDays" checked> Mostrar días en el título</label>
+        <label><input type="checkbox" id="showHours" checked> Mostrar HH en el título</label>
+      </div>
     </div>
 
     <div class="panel">
@@ -101,7 +110,6 @@
     const TASK_COLORS=["bg-bar-1","bg-bar-2","bg-bar-3","bg-bar-4","bg-bar-5","bg-bar-6","bg-bar-7"];
 
     // ====== ESTADO ======
-    // startHour fijo por fila: así la barra nunca cambia de actividad
     let tasks=[
       {id:1,name:"Análisis y Diseño",duration:4.9,color:"bg-bar-1",startHour:0},
       {id:2,name:"Desarrollo",duration:17.0,color:"bg-bar-2",startHour:4.9},
@@ -161,8 +169,6 @@
         hrs.inputMode='decimal';
         hrs.value = t.duration;
         hrs.className='task-hrs';
-
-        // IMPORTANTE: solo volvemos a dibujar el Gantt, no la tabla
         hrs.oninput=e=>{
           let val=e.target.value.replace(',','.');
           if(val==="" || val==="."){ t.duration = 0; renderGantt(); return; }
@@ -190,7 +196,16 @@
       $('#meta').innerHTML=`<span class="badge">Horas Totales: <b>${totalHours.toFixed(1)} hh</b></span><span class="badge">${totalLaboralDays} ${totalLaboralDays==='1.0'?'día':'días'} laborales</span><span class="badge">Unidad de Tiempo: <b>${unit==='day'?'Días':'Semanas'}</b> (${totalUnits} ${unit==='day'?'días':'semanas'})</span>`;
 
       const title=$('#title').value; const sub=$('#subtitle').value;
-      $('#header').textContent=`${title} (${totalLaboralDays} ${totalLaboralDays==='1.0'?'día':'días'} / ${totalHours.toFixed(1)} HH)`;
+
+      // LECTURA DE CHECKBOXES
+      const showDays = $('#showDays') ? $('#showDays').checked : true;
+      const showHours = $('#showHours') ? $('#showHours').checked : true;
+      let parts = [];
+      if(showDays)  parts.push(`${totalLaboralDays} ${totalLaboralDays==='1.0'?'día':'días'}`);
+      if(showHours) parts.push(`${totalHours.toFixed(1)} HH`);
+      const suffix = parts.length ? ` (${parts.join(' / ')})` : '';
+
+      $('#header').textContent = `${title}${suffix}`;
       $('#subtitleView').textContent=sub;
 
       const gantt=$('#gantt-chart');
@@ -230,10 +245,9 @@
         const left=(t.startHour/totalGridHours)*100;
         seg.style.width=width+'%';
         seg.style.left=left+'%';
-        // SIN texto en la barra
-        seg.textContent = "";
+        seg.textContent = ""; // sin texto
 
-        // Drag horizontal de la barra (dentro de su misma fila)
+        // Drag horizontal de la barra
         seg.addEventListener('pointerdown', (e)=>{
           draggingTaskId = t.id;
           draggingTaskDuration = t.duration;
@@ -264,7 +278,6 @@
         body.appendChild(row);
       });
 
-      // Fin real del proyecto (máximo endHour)
       let projectEndHours = 0;
       calc.forEach(t=>{
         if(t.endHour > projectEndHours) projectEndHours = t.endHour;
@@ -287,6 +300,12 @@
     };
     $('#title').oninput=$('#subtitle').oninput=()=>renderGantt();
 
+    // checkboxes título
+    const showDaysInput = $('#showDays');
+    const showHoursInput = $('#showHours');
+    if(showDaysInput)  showDaysInput.addEventListener('change', renderGantt);
+    if(showHoursInput) showHoursInput.addEventListener('change', renderGantt);
+
     // Go Live
     const lineEl=$('#goLiveLine'), container=$('#goLiveLineContainer');
     lineEl.addEventListener('pointerdown',e=>{
@@ -307,7 +326,6 @@
     });
 
     document.addEventListener('pointermove',e=>{
-      // mover GO LIVE
       if(isDragging){
         const rect=container.getBoundingClientRect();
         let x=e.clientX-rect.left;
@@ -316,7 +334,6 @@
         lineEl.style.left=goLivePercent+'%';
       }
 
-      // mover barras
       if(draggingTaskId && draggingTimelineRect){
         const rect = draggingTimelineRect;
         let x = e.clientX - rect.left;
@@ -330,7 +347,7 @@
         const task = tasks.find(t=>t.id===draggingTaskId);
         if(task){
           task.startHour = startHour;
-          renderGantt(); // solo el gráfico, filas intactas
+          renderGantt();
         }
       }
     });

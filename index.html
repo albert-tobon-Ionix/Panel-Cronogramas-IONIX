@@ -67,6 +67,7 @@
 <body>
   <div class="wrap">
     <h1>Panel de Control y Cronograma</h1>
+
     <div class="panel">
       <h2>Edición de Tareas (Duración en Horas)</h2>
       <div class="row cols-2" style="margin-bottom:10px">
@@ -74,8 +75,6 @@
         <div><div class="label">Subtítulo</div><input id="subtitle" class="input" value="Flujo de Desarrollo y Recorrido de Horas" /></div>
       </div>
       <div class="meta" id="meta"></div>
-
-      <!-- Checkboxes para mostrar/ocultar días y HH en el título -->
       <div class="meta-toggles">
         <label><input type="checkbox" id="showDays" checked> Mostrar días en el título</label>
         <label><input type="checkbox" id="showHours" checked> Mostrar HH en el título</label>
@@ -87,11 +86,11 @@
       <div style="overflow-x:auto">
         <table>
           <thead>
-          <tr>
-            <th>Tarea</th>
-            <th style="width:120px;text-align:center">Duración (hh)</th>
-            <th style="width:110px">Acción</th>
-          </tr>
+            <tr>
+              <th>Tarea</th>
+              <th style="width:120px;text-align:center">Duración (hh)</th>
+              <th style="width:120px">Acción</th>
+            </tr>
           </thead>
           <tbody id="tbody"></tbody>
         </table>
@@ -100,7 +99,10 @@
     </div>
 
     <div class="panel" style="padding:0">
-      <div style="padding:16px 16px 0"><h2 id="header"></h2><div class="muted" id="subtitleView"></div></div>
+      <div style="padding:16px 16px 0">
+        <h2 id="header"></h2>
+        <div class="muted" id="subtitleView"></div>
+      </div>
       <div style="padding:16px; overflow-x:auto">
         <div id="gantt-chart">
           <div id="taskHeader">Tarea</div>
@@ -113,177 +115,215 @@
   </div>
 
   <script>
-    // ====== CONSTANTES ======
-    const HOURS_PER_DAY=8, DAYS_PER_WEEK=5, HOURS_PER_WEEK=HOURS_PER_DAY*DAYS_PER_WEEK;
-    const TASK_COLORS=["bg-bar-1","bg-bar-2","bg-bar-3","bg-bar-4","bg-bar-5","bg-bar-6","bg-bar-7"];
+    // ===== CONSTANTES Y ESTADO =====
+    const HOURS_PER_DAY = 8;
+    const DAYS_PER_WEEK = 5;
+    const HOURS_PER_WEEK = HOURS_PER_DAY * DAYS_PER_WEEK;
+    const TASK_COLORS = ["bg-bar-1","bg-bar-2","bg-bar-3","bg-bar-4","bg-bar-5","bg-bar-6","bg-bar-7"];
 
-    // ====== ESTADO ======
-    let tasks=[
+    let tasks = [
       {id:1,name:"Análisis y Diseño",duration:4.9,color:"bg-bar-1",startHour:0},
       {id:2,name:"Desarrollo",duration:17.0,color:"bg-bar-2",startHour:4.9},
       {id:3,name:"Pruebas QA",duration:5.0,color:"bg-bar-3",startHour:21.9},
       {id:4,name:"PDR, Documentación y Entrega",duration:2.0,color:"bg-bar-4",startHour:26.9}
     ];
-    let goLivePercent=100, isDragging=false;
 
-    // Drag de barras
-    let draggingTaskId=null;
-    let draggingOffsetHours=0;
-    let draggingTotalGridHours=0;
-    let draggingTimelineRect=null;
-    let draggingTaskDuration=0;
+    let goLivePercent = 100;
+    let isDraggingGoLive = false;
 
-    // ====== HELPERS ======
-    const $=s=>document.querySelector(s); const rndId=()=>Math.random().toString(36).slice(2);
-    const calcTotalHours=arr=>arr.reduce((s,t)=>s+(parseFloat(t.duration)||0),0);
+    // drag barras
+    let draggingTaskId = null;
+    let draggingOffsetHours = 0;
+    let draggingTotalGridHours = 0;
+    let draggingTimelineRect = null;
+    let draggingTaskDuration = 0;
+
+    // ===== HELPERS =====
+    const $ = sel => document.querySelector(sel);
+    const rndId = () => Math.random().toString(36).slice(2);
+    const calcTotalHours = arr => arr.reduce((s,t)=>s+(parseFloat(t.duration)||0),0);
     function getTimelineUnit(totalHours){
-      const d=totalHours/HOURS_PER_DAY;
-      let unit,hpu,units;
-      if(d<=DAYS_PER_WEEK){unit='day';hpu=HOURS_PER_DAY;units=Math.max(1,Math.ceil(d));}
-      else{unit='week';hpu=HOURS_PER_WEEK;units=Math.ceil(d/DAYS_PER_WEEK);}
-      return {unit,hoursPerUnit:hpu,totalUnits:units,totalGridHours:units*hpu};
+      const d = totalHours / HOURS_PER_DAY;
+      let unit, hpu, units;
+      if(d <= DAYS_PER_WEEK){
+        unit = "day";
+        hpu = HOURS_PER_DAY;
+        units = Math.max(1, Math.ceil(d));
+      } else {
+        unit = "week";
+        hpu = HOURS_PER_WEEK;
+        units = Math.ceil(d / DAYS_PER_WEEK);
+      }
+      return {unit, hoursPerUnit:hpu, totalUnits:units, totalGridHours:units*hpu};
     }
-    const fmtH=h=>h%1===0? h.toFixed(0):h.toFixed(1);
-    const getVar=(n)=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-    const setVar=(n,v)=>document.documentElement.style.setProperty(n,v);
+    const getVar = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+    const setVar = (n,v) => document.documentElement.style.setProperty(n,v);
 
     function moveTask(fromIndex,toIndex){
       if(toIndex<0 || toIndex>=tasks.length) return;
-      const [item]=tasks.splice(fromIndex,1);
+      const [item] = tasks.splice(fromIndex,1);
       tasks.splice(toIndex,0,item);
       renderAll();
     }
 
-    // ====== TABLA ======
+    // ===== TABLA =====
     function renderTasksTable(){
-      const tbody=$('#tbody'); tbody.innerHTML='';
+      const tbody = $("#tbody");
+      tbody.innerHTML = "";
+
       tasks.forEach((t,i)=>{
-        const tr=document.createElement('tr');
-        const tdN=document.createElement('td'); const tdH=document.createElement('td'); const tdA=document.createElement('td');
+        const tr = document.createElement("tr");
+        const tdN = document.createElement("td");
+        const tdH = document.createElement("td");
+        const tdA = document.createElement("td");
 
-        const wrap=document.createElement('div'); wrap.style.display='flex'; wrap.style.alignItems='center'; wrap.style.gap='10px';
+        // nombre + color
+        const wrap = document.createElement("div");
+        wrap.style.display="flex";
+        wrap.style.alignItems="center";
+        wrap.style.gap="10px";
+
         const cssVar = `--bar-${(i%7)+1}`;
-        const colorInput=document.createElement('input');
-        colorInput.type='color';
-        const init = getVar(cssVar) || '#005B96';
-        colorInput.value=init.trim().startsWith('#')? init.trim(): '#005B96';
-        colorInput.style.width='38px'; colorInput.style.height='28px'; colorInput.style.border='0'; colorInput.style.borderRadius='6px'; colorInput.style.cursor='pointer';
+        const colorInput = document.createElement("input");
+        colorInput.type="color";
+        const init = getVar(cssVar) || "#005B96";
+        colorInput.value = init.startsWith("#") ? init : "#005B96";
+        colorInput.style.width="38px";
+        colorInput.style.height="28px";
+        colorInput.style.border="0";
+        colorInput.style.borderRadius="6px";
+        colorInput.style.cursor="pointer";
 
-        const nameInput=document.createElement('input');
-        nameInput.value=t.name; nameInput.className='task-name-chip'; nameInput.style.background=colorInput.value;
-        nameInput.oninput=e=>{t.name=e.target.value; renderGantt();};
+        const nameInput = document.createElement("input");
+        nameInput.value = t.name;
+        nameInput.className = "task-name-chip";
+        nameInput.style.background = colorInput.value;
+        nameInput.oninput = e => { t.name = e.target.value; renderGantt(); };
 
-        colorInput.oninput=e=>{ setVar(cssVar, e.target.value); nameInput.style.background=e.target.value; renderGantt(); };
+        colorInput.oninput = e => {
+          setVar(cssVar, e.target.value);
+          nameInput.style.background = e.target.value;
+          renderGantt();
+        };
 
-        wrap.appendChild(colorInput); wrap.appendChild(nameInput); tdN.appendChild(wrap);
+        wrap.appendChild(colorInput);
+        wrap.appendChild(nameInput);
+        tdN.appendChild(wrap);
 
-        const hrs=document.createElement('input');
-        hrs.type='number';
-        hrs.step='0.1';
-        hrs.min='0';
-        hrs.inputMode='decimal';
+        // horas
+        const hrs = document.createElement("input");
+        hrs.type = "number";
+        hrs.step = "0.1";
+        hrs.min = "0";
+        hrs.inputMode = "decimal";
         hrs.value = t.duration;
-        hrs.className='task-hrs';
-        hrs.oninput=e=>{
-          let val=e.target.value.replace(',','.');
-          if(val==="" || val==="."){ t.duration = 0; renderGantt(); return; }
-          const num=parseFloat(val);
-          if(!isNaN(num)){ t.duration=num; renderGantt(); }
+        hrs.className = "task-hrs";
+        hrs.oninput = e => {
+          let val = e.target.value.replace(",",".");
+          if(val === "" || val === "."){ t.duration = 0; renderGantt(); return; }
+          const num = parseFloat(val);
+          if(!isNaN(num)){ t.duration = num; renderGantt(); }
         };
         tdH.appendChild(hrs);
 
-        // acciones: subir, bajar, eliminar
-        const upBtn=document.createElement('button');
-        upBtn.className='reorder';
-        upBtn.innerHTML='↑';
-        upBtn.disabled=i===0;
-        upBtn.title='Mover arriba';
-        upBtn.onclick=()=>moveTask(i,i-1);
+        // acciones (up, down, delete)
+        const upBtn = document.createElement("button");
+        upBtn.className = "reorder";
+        upBtn.innerHTML = "↑";
+        upBtn.disabled = i===0;
+        upBtn.title = "Mover arriba";
+        upBtn.onclick = () => moveTask(i,i-1);
 
-        const downBtn=document.createElement('button');
-        downBtn.className='reorder';
-        downBtn.innerHTML='↓';
-        downBtn.disabled=i===tasks.length-1;
-        downBtn.title='Mover abajo';
-        downBtn.onclick=()=>moveTask(i,i+1);
+        const downBtn = document.createElement("button");
+        downBtn.className = "reorder";
+        downBtn.innerHTML = "↓";
+        downBtn.disabled = i===tasks.length-1;
+        downBtn.title = "Mover abajo";
+        downBtn.onclick = () => moveTask(i,i+1);
 
-        const btn=document.createElement('button');
-        btn.className='remove';
-        btn.innerHTML='&times;';
-        btn.title='Eliminar tarea';
-        btn.onclick=()=>{tasks=tasks.filter(x=>x.id!==t.id); renderAll();};
+        const delBtn = document.createElement("button");
+        delBtn.className = "remove";
+        delBtn.innerHTML = "&times;";
+        delBtn.title = "Eliminar tarea";
+        delBtn.onclick = () => { tasks = tasks.filter(x=>x.id!==t.id); renderAll(); };
 
         tdA.appendChild(upBtn);
         tdA.appendChild(downBtn);
-        tdA.appendChild(btn);
+        tdA.appendChild(delBtn);
 
-        tr.append(tdN,tdH,tdA); tbody.appendChild(tr);
+        tr.append(tdN,tdH,tdA);
+        tbody.appendChild(tr);
       });
     }
 
-    // ====== GANTT ======
+    // ===== GANTT =====
     function renderGantt(){
-      const totalHours=calcTotalHours(tasks);
-      const {unit,hoursPerUnit,totalUnits,totalGridHours}=getTimelineUnit(totalHours);
+      const totalHours = calcTotalHours(tasks);
+      const {unit,hoursPerUnit,totalUnits,totalGridHours} = getTimelineUnit(totalHours);
       draggingTotalGridHours = totalGridHours;
 
-      const totalLaboralDays=(totalHours/HOURS_PER_DAY).toFixed(1);
-      $('#meta').innerHTML=`<span class="badge">Horas Totales: <b>${totalHours.toFixed(1)} hh</b></span><span class="badge">${totalLaboralDays} ${totalLaboralDays==='1.0'?'día':'días'} laborales</span><span class="badge">Unidad de Tiempo: <b>${unit==='day'?'Días':'Semanas'}</b> (${totalUnits} ${unit==='day'?'días':'semanas'})</span>`;
+      const totalLaboralDays = (totalHours / HOURS_PER_DAY).toFixed(1);
+      $("#meta").innerHTML =
+        `<span class="badge">Horas Totales: <b>${totalHours.toFixed(1)} hh</b></span>` +
+        `<span class="badge">${totalLaboralDays} ${totalLaboralDays==="1.0"?"día":"días"} laborales</span>` +
+        `<span class="badge">Unidad de Tiempo: <b>${unit==="day"?"Días":"Semanas"}</b> (${totalUnits} ${unit==="day"?"días":"semanas"})</span>`;
 
-      const title=$('#title').value; const sub=$('#subtitle').value;
-      const showDays = $('#showDays') ? $('#showDays').checked : true;
-      const showHours = $('#showHours') ? $('#showHours').checked : true;
+      const title = $("#title").value;
+      const sub   = $("#subtitle").value;
+      const showDays  = $("#showDays")?.checked ?? true;
+      const showHours = $("#showHours")?.checked ?? true;
       let parts = [];
-      if(showDays)  parts.push(`${totalLaboralDays} ${totalLaboralDays==='1.0'?'día':'días'}`);
+      if(showDays)  parts.push(`${totalLaboralDays} ${totalLaboralDays==="1.0"?"día":"días"}`);
       if(showHours) parts.push(`${totalHours.toFixed(1)} HH`);
-      const suffix = parts.length ? ` (${parts.join(' / ')})` : '';
+      const suffix = parts.length ? ` (${parts.join(" / ")})` : "";
+      $("#header").textContent = `${title}${suffix}`;
+      $("#subtitleView").textContent = sub;
 
-      $('#header').textContent = `${title}${suffix}`;
-      $('#subtitleView').textContent=sub;
+      const gantt = $("#gantt-chart");
+      gantt.style.gridTemplateColumns = `250px repeat(${totalUnits},1fr)`;
 
-      const gantt=$('#gantt-chart');
-      gantt.style.gridTemplateColumns=`250px repeat(${totalUnits},1fr)`;
-
-      const labels=$('#timelineLabels');
-      labels.style.gridTemplateColumns=`repeat(${totalUnits},1fr)`;
-      labels.innerHTML='';
+      const labels = $("#timelineLabels");
+      labels.style.gridTemplateColumns = `repeat(${totalUnits},1fr)`;
+      labels.innerHTML = "";
       for(let i=0;i<totalUnits;i++){
-        const d=document.createElement('div');
-        d.className='timeline-label';
-        d.textContent=`${unit==='day'?'Día':'Semana'} ${i+1}`;
+        const d = document.createElement("div");
+        d.className="timeline-label";
+        d.textContent = `${unit==="day"?"Día":"Semana"} ${i+1}`;
         labels.appendChild(d);
       }
 
-      const body=$('#gantt-body'); body.innerHTML='';
+      const body = $("#gantt-body");
+      body.innerHTML = "";
 
-      const calc=tasks.map(t=>{
-        const dur=parseFloat(Number(t.duration).toFixed(2)) || 0;
-        const start = (typeof t.startHour === 'number' && !Number.isNaN(t.startHour)) ? t.startHour : 0;
+      const calc = tasks.map(t=>{
+        const dur = parseFloat(Number(t.duration).toFixed(2)) || 0;
+        const start = (typeof t.startHour==="number" && !Number.isNaN(t.startHour)) ? t.startHour : 0;
         return {...t,duration:dur,startHour:start,endHour:start+dur};
       });
 
-      calc.forEach((t)=>{
-        const cell=document.createElement('div');
-        cell.className='task-cell';
+      calc.forEach(t=>{
+        const cell = document.createElement("div");
+        cell.className="task-cell";
         cell.textContent=t.name;
         body.appendChild(cell);
 
-        const row=document.createElement('div');
-        row.className='bar-row';
+        const row = document.createElement("div");
+        row.className="bar-row";
         row.style.gridColumn=`2 / ${totalUnits+2}`;
 
-        const seg=document.createElement('div');
+        const seg=document.createElement("div");
         seg.className=`task-bar-segment ${t.color}`;
         const width=(t.duration/totalGridHours)*100;
         const left=(t.startHour/totalGridHours)*100;
-        seg.style.width=width+'%';
-        seg.style.left=left+'%';
-        seg.textContent = ""; // sin texto
+        seg.style.width=width+"%";
+        seg.style.left=left+"%";
+        seg.textContent=""; // sin texto en barra
 
-        seg.addEventListener('pointerdown', (e)=>{
+        // Drag horizontal
+        seg.addEventListener("pointerdown",e=>{
           draggingTaskId = t.id;
           draggingTaskDuration = t.duration;
-          const timelineRect = $('#goLiveLineContainer').getBoundingClientRect();
+          const timelineRect = $("#goLiveLineContainer").getBoundingClientRect();
           draggingTimelineRect = timelineRect;
 
           const barLeftPx = timelineRect.left + (t.startHour/totalGridHours)*timelineRect.width;
@@ -297,57 +337,57 @@
 
         row.appendChild(seg);
 
-        const divs=document.createElement('div');
-        divs.className='grid-overlay';
+        const divs=document.createElement("div");
+        divs.className="grid-overlay";
         divs.style.gridTemplateColumns=`repeat(${totalUnits},1fr)`;
         for(let j=0;j<totalUnits;j++){
-          const dv=document.createElement('div');
-          dv.className='bar-cell-divider';
+          const dv=document.createElement("div");
+          dv.className="bar-cell-divider";
           divs.appendChild(dv);
         }
         row.appendChild(divs);
-
         body.appendChild(row);
       });
 
+      // Fin de proyecto para GO LIVE
       let projectEndHours = 0;
-      calc.forEach(t=>{
-        if(t.endHour > projectEndHours) projectEndHours = t.endHour;
-      });
-
-      const line=$('#goLiveLine');
-      const projectEndPercent = projectEndHours>0 ? Math.min(100, Math.max(0,(projectEndHours/totalGridHours)*100)) : 0;
-      if(!isDragging){ goLivePercent = projectEndPercent; }
-      line.style.left=goLivePercent+'%';
+      calc.forEach(t=>{ if(t.endHour>projectEndHours) projectEndHours=t.endHour; });
+      const line = $("#goLiveLine");
+      const projectEndPercent = projectEndHours>0 ? Math.min(100,Math.max(0,(projectEndHours/totalGridHours)*100)) : 0;
+      if(!isDraggingGoLive){ goLivePercent = projectEndPercent; }
+      line.style.left = goLivePercent + "%";
     }
 
-    function renderAll(){renderTasksTable();renderGantt();}
+    function renderAll(){
+      renderTasksTable();
+      renderGantt();
+    }
 
-    // ====== EVENTOS ======
-    $('#addBtn').onclick=()=>{
-      const idx=tasks.length%TASK_COLORS.length;
+    // ===== EVENTOS =====
+    $("#addBtn").onclick = ()=>{
+      const idx = tasks.length % TASK_COLORS.length;
       const maxEnd = tasks.reduce((m,t)=>Math.max(m,(t.startHour||0)+(parseFloat(t.duration)||0)),0);
-      tasks.push({id:rndId(),name:'Nueva Tarea',duration:8,color:TASK_COLORS[idx],startHour:maxEnd});
+      tasks.push({id:rndId(),name:"Nueva Tarea",duration:8,color:TASK_COLORS[idx],startHour:maxEnd});
       renderAll();
     };
-    $('#title').oninput=$('#subtitle').oninput=()=>renderGantt();
 
-    const showDaysInput = $('#showDays');
-    const showHoursInput = $('#showHours');
-    if(showDaysInput)  showDaysInput.addEventListener('change', renderGantt);
-    if(showHoursInput) showHoursInput.addEventListener('change', renderGantt);
+    $("#title").oninput = $("#subtitle").oninput = () => renderGantt();
+    $("#showDays")?.addEventListener("change", renderGantt);
+    $("#showHours")?.addEventListener("change", renderGantt);
 
-    const lineEl=$('#goLiveLine'), container=$('#goLiveLineContainer');
-    lineEl.addEventListener('pointerdown',e=>{
-      isDragging=true;
+    const lineEl = $("#goLiveLine");
+    const container = $("#goLiveLineContainer");
+
+    lineEl.addEventListener("pointerdown",e=>{
+      isDraggingGoLive = true;
       lineEl.setPointerCapture(e.pointerId);
-      lineEl.style.cursor='grabbing';
+      lineEl.style.cursor="grabbing";
     });
 
-    document.addEventListener('pointerup',()=>{
-      if(isDragging){
-        isDragging=false;
-        lineEl.style.cursor='grab';
+    document.addEventListener("pointerup",()=>{
+      if(isDraggingGoLive){
+        isDraggingGoLive=false;
+        lineEl.style.cursor="grab";
       }
       if(draggingTaskId){
         draggingTaskId=null;
@@ -355,24 +395,25 @@
       }
     });
 
-    document.addEventListener('pointermove',e=>{
-      if(isDragging){
+    document.addEventListener("pointermove",e=>{
+      // GO LIVE
+      if(isDraggingGoLive){
         const rect=container.getBoundingClientRect();
         let x=e.clientX-rect.left;
         x=Math.max(0,Math.min(x,rect.width));
         goLivePercent=(x/rect.width)*100;
-        lineEl.style.left=goLivePercent+'%';
+        lineEl.style.left=goLivePercent+"%";
       }
 
+      // barras
       if(draggingTaskId && draggingTimelineRect){
         const rect = draggingTimelineRect;
         let x = e.clientX - rect.left;
-        x = Math.max(0, Math.min(x, rect.width));
+        x = Math.max(0,Math.min(x,rect.width));
         let startHour = (x/rect.width)*draggingTotalGridHours - draggingOffsetHours;
-
-        const maxStart = Math.max(0, draggingTotalGridHours - draggingTaskDuration);
-        if(startHour < 0) startHour = 0;
-        if(startHour > maxStart) startHour = maxStart;
+        const maxStart = Math.max(0,draggingTotalGridHours-draggingTaskDuration);
+        if(startHour<0) startHour=0;
+        if(startHour>maxStart) startHour=maxStart;
 
         const task = tasks.find(t=>t.id===draggingTaskId);
         if(task){
@@ -382,36 +423,23 @@
       }
     });
 
-    lineEl.addEventListener('keydown',e=>{
+    lineEl.addEventListener("keydown",e=>{
       let step=1;
-      if(e.key==='ArrowLeft'){
+      if(e.key==="ArrowLeft"){
         goLivePercent=Math.max(0,goLivePercent-step);
         renderGantt();
         e.preventDefault();
       }
-      if(e.key==='ArrowRight'){
+      if(e.key==="ArrowRight"){
         goLivePercent=Math.min(100,goLivePercent+step);
         renderGantt();
         e.preventDefault();
       }
     });
-    lineEl.tabIndex=0;
+    lineEl.tabIndex = 0;
 
-    // ====== INICIO ======
+    // ===== INICIO =====
     renderAll();
-
-    // ====== PRUEBAS AUTOMÁTICAS (básicas) ======
-    (function runTests(){
-      try{
-        console.log('%c[TEST] Inicio de pruebas','color: #2563eb');
-        console.assert(!document.querySelector('#ok') && !document.querySelector('#colorPopover'), 'No debe existir popover antiguo (#ok/#colorPopover)');
-        const colorPickers = () => Array.from(document.querySelectorAll('tbody input[type="color"]'));
-        console.assert(colorPickers().length === tasks.length, 'Cantidad de color pickers debe igualar tareas');
-        if(colorPickers().length){
-          const cssVar = '--bar-1';
-          const before = getVar(cssVar);
-          colorPickers()[0].value = '#1e90ff';
-          colorPickers()[0].dispatchEvent(new Event('input', {bubbles:true}));
-          const after = getVar(cssVar);
-          console.assert(before !== after, 'La variable CSS debería actualizarse al cambiar el picker');
-        }
+  </script>
+</body>
+</html>

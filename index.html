@@ -35,7 +35,7 @@
 
     /* ======= Gantt ======= */
     #gantt-chart{display:grid;grid-template-columns:250px repeat(1,1fr);border:1px solid #e0e0e0;border-radius:12px;overflow:hidden;position:relative}
-    #taskHeader,#timelineContainer{background:#e6f0f4;font-weight:800;padding:8px 16px;border-bottom:2px solid var(--bar-1);color:var(--ink);height:50px;display:flex;align-items:center;justify-content:center}
+    #taskHeader,#timelineContainer{background:#e6f0f4;font-weight:800;padding:8px 16px;border-bottom:2px solid #2b5878;color:var(--ink);height:50px;display:flex;align-items:center;justify-content:center}
     #taskHeader{grid-column:1;border-right:1px solid #d1e4eb}
     #timelineContainer{grid-column:2 / -1;padding:0}
     #timelineLabels{display:grid;grid-template-columns:repeat(1,1fr);width:100%;height:100%}
@@ -120,6 +120,7 @@
     const DAYS_PER_WEEK = 5;
     const HOURS_PER_WEEK = HOURS_PER_DAY * DAYS_PER_WEEK;
     const TASK_COLORS = ["bg-bar-1","bg-bar-2","bg-bar-3","bg-bar-4","bg-bar-5","bg-bar-6","bg-bar-7"];
+    const STORAGE_KEY = "ionixCronogramaState_v1";
 
     let tasks = [
       {id:1,name:"Análisis y Diseño",duration:4.9,color:"bg-bar-1",startHour:0},
@@ -166,6 +167,64 @@
       renderAll();
     }
 
+    // ===== PERSISTENCIA (localStorage) =====
+    function saveState(){
+      try{
+        const palette = {};
+        for(let i=1;i<=7;i++){
+          palette["bar"+i] = getVar(`--bar-${i}`);
+        }
+        const state = {
+          tasks,
+          title: $("#title")?.value ?? "",
+          subtitle: $("#subtitle")?.value ?? "",
+          showDays: $("#showDays")?.checked ?? true,
+          showHours: $("#showHours")?.checked ?? true,
+          goLivePercent,
+          palette
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      }catch(e){
+        console.error("No se pudo guardar el cronograma:", e);
+      }
+    }
+
+    function loadState(){
+      try{
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if(!raw) return;
+        const state = JSON.parse(raw);
+
+        if(state.tasks && Array.isArray(state.tasks) && state.tasks.length){
+          tasks = state.tasks.map((t,i)=>({
+            id: t.id ?? rndId(),
+            name: t.name ?? `Tarea ${i+1}`,
+            duration: Number(t.duration) || 0,
+            color: t.color ?? TASK_COLORS[i%TASK_COLORS.length],
+            startHour: Number(t.startHour) || 0
+          }));
+        }
+
+        if(typeof state.goLivePercent === "number"){
+          goLivePercent = state.goLivePercent;
+        }
+
+        if($("#title") && typeof state.title === "string") $("#title").value = state.title;
+        if($("#subtitle") && typeof state.subtitle === "string") $("#subtitle").value = state.subtitle;
+        if($("#showDays") && typeof state.showDays === "boolean") $("#showDays").checked = state.showDays;
+        if($("#showHours") && typeof state.showHours === "boolean") $("#showHours").checked = state.showHours;
+
+        if(state.palette){
+          for(let i=1;i<=7;i++){
+            const key = "bar"+i;
+            if(state.palette[key]) setVar(`--bar-${i}`, state.palette[key]);
+          }
+        }
+      }catch(e){
+        console.error("No se pudo cargar el cronograma guardado:", e);
+      }
+    }
+
     // ===== TABLA =====
     function renderTasksTable(){
       const tbody = $("#tbody");
@@ -198,12 +257,12 @@
         nameInput.value = t.name;
         nameInput.className = "task-name-chip";
         nameInput.style.background = colorInput.value;
-        nameInput.oninput = e => { t.name = e.target.value; renderGantt(); };
+        nameInput.oninput = e => { t.name = e.target.value; renderGantt(); saveState(); };
 
         colorInput.oninput = e => {
           setVar(cssVar, e.target.value);
           nameInput.style.background = e.target.value;
-          renderGantt();
+          renderGantt(); saveState();
         };
 
         wrap.appendChild(colorInput);
@@ -220,9 +279,9 @@
         hrs.className = "task-hrs";
         hrs.oninput = e => {
           let val = e.target.value.replace(",",".");
-          if(val === "" || val === "."){ t.duration = 0; renderGantt(); return; }
+          if(val === "" || val === "."){ t.duration = 0; renderGantt(); saveState(); return; }
           const num = parseFloat(val);
-          if(!isNaN(num)){ t.duration = num; renderGantt(); }
+          if(!isNaN(num)){ t.duration = num; renderGantt(); saveState(); }
         };
         tdH.appendChild(hrs);
 
@@ -361,6 +420,7 @@
     function renderAll(){
       renderTasksTable();
       renderGantt();
+      saveState();
     }
 
     // ===== EVENTOS =====
@@ -371,9 +431,9 @@
       renderAll();
     };
 
-    $("#title").oninput = $("#subtitle").oninput = () => renderGantt();
-    $("#showDays")?.addEventListener("change", renderGantt);
-    $("#showHours")?.addEventListener("change", renderGantt);
+    $("#title").oninput = $("#subtitle").oninput = () => { renderGantt(); saveState(); };
+    $("#showDays")?.addEventListener("change", ()=>{ renderGantt(); saveState(); });
+    $("#showHours")?.addEventListener("change", ()=>{ renderGantt(); saveState(); });
 
     const lineEl = $("#goLiveLine");
     const container = $("#goLiveLineContainer");
@@ -388,10 +448,12 @@
       if(isDraggingGoLive){
         isDraggingGoLive=false;
         lineEl.style.cursor="grab";
+        saveState();
       }
       if(draggingTaskId){
         draggingTaskId=null;
         draggingTimelineRect=null;
+        saveState();
       }
     });
 
@@ -418,7 +480,7 @@
         const task = tasks.find(t=>t.id===draggingTaskId);
         if(task){
           task.startHour = startHour;
-          renderGantt();
+          renderGantt(); // no guardo aquí para no spamear, se guarda en pointerup
         }
       }
     });
@@ -427,19 +489,20 @@
       let step=1;
       if(e.key==="ArrowLeft"){
         goLivePercent=Math.max(0,goLivePercent-step);
-        renderGantt();
+        renderGantt(); saveState();
         e.preventDefault();
       }
       if(e.key==="ArrowRight"){
         goLivePercent=Math.min(100,goLivePercent+step);
-        renderGantt();
+        renderGantt(); saveState();
         e.preventDefault();
       }
     });
     lineEl.tabIndex = 0;
 
     // ===== INICIO =====
-    renderAll();
+    loadState();   // intenta cargar el último cronograma guardado
+    renderAll();   // y lo dibuja
   </script>
 </body>
 </html>

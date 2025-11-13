@@ -46,7 +46,24 @@
     .grid-overlay{position:absolute;inset:0;display:grid;z-index:5}
     .bar-cell-divider{height:40px;border-right:1px solid var(--grid-border)}
 
-    .task-bar-segment{position:absolute;top:15%;height:70%;border-radius:6px;display:flex;align-items:center;justify-content:center;padding:0 6px;color:#fff;font-size:11px;font-weight:800;box-shadow:0 6px 14px rgba(0,0,0,.18);white-space:nowrap;z-index:40;pointer-events:none;cursor:default}
+    .task-bar-segment{
+      position:absolute;
+      top:15%;
+      height:70%;
+      border-radius:6px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:0 6px;
+      color:#fff;
+      font-size:11px;
+      font-weight:800;
+      box-shadow:0 6px 14px rgba(0,0,0,.18);
+      white-space:nowrap;
+      z-index:40;
+      pointer-events:auto;
+      cursor:grab;
+    }
     .bg-bar-1{background:var(--bar-1)}.bg-bar-2{background:var(--bar-2)}.bg-bar-3{background:var(--bar-3)}.bg-bar-4{background:var(--bar-4)}.bg-bar-5{background:var(--bar-5)}.bg-bar-6{background:var(--bar-6)}.bg-bar-7{background:var(--bar-7)}
 
     #goLiveLineContainer{position:absolute;top:50px;bottom:0;left:250px;width:calc(100% - 250px);pointer-events:none;z-index:30}
@@ -110,14 +127,32 @@
     ];
     let goLivePercent=100, isDragging=false;
 
+    // inicializar posiciones secuenciales
+    (function initStarts(){
+      let s = 0;
+      tasks.forEach(t => {
+        t._startHour = s;
+        s += t.duration;
+      });
+    })();
+
     // ====== HELPERS ======
     const $=s=>document.querySelector(s); const rndId=()=>Math.random().toString(36).slice(2);
     const calcTotalHours=arr=>arr.reduce((s,t)=>s+(parseFloat(t.duration)||0),0);
-    function getTimelineUnit(totalHours){const d=totalHours/HOURS_PER_DAY; let unit,hpu,units; if(d<=DAYS_PER_WEEK){unit='day';hpu=HOURS_PER_DAY;units=Math.max(1,Math.ceil(d));} else{unit='week';hpu=HOURS_PER_WEEK;units=Math.ceil(d/DAYS_PER_WEEK);} return {unit,hoursPerUnit:hpu,totalUnits:units,totalGridHours:units*hpu};}
+    function getTimelineUnit(totalHours){
+      const d=totalHours/HOURS_PER_DAY;
+      let unit,hpu,units;
+      if(d<=DAYS_PER_WEEK){unit='day';hpu=HOURS_PER_DAY;units=Math.max(1,Math.ceil(d));}
+      else{unit='week';hpu=HOURS_PER_WEEK;units=Math.ceil(d/DAYS_PER_WEEK);}
+      return {unit,hoursPerUnit:hpu,totalUnits:units,totalGridHours:units*hpu};
+    }
     const fmtH=h=>h%1===0? h.toFixed(0):h.toFixed(1);
-    // Helpers CSS vars
     const getVar=(n)=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
     const setVar=(n,v)=>document.documentElement.style.setProperty(n,v);
+
+    function reorderTasksByStart() {
+      tasks.sort((a,b)=>(a._startHour||0)-(b._startHour||0));
+    }
 
     // ====== TABLA ======
     function renderTasksTable(){
@@ -135,14 +170,31 @@
         colorInput.style.width='38px'; colorInput.style.height='28px'; colorInput.style.border='0'; colorInput.style.borderRadius='6px'; colorInput.style.cursor='pointer';
 
         const nameInput=document.createElement('input');
-        nameInput.value=t.name; nameInput.className='task-name-chip'; nameInput.style.background=colorInput.value; nameInput.oninput=e=>{t.name=e.target.value; renderGantt();};
+        nameInput.value=t.name; nameInput.className='task-name-chip'; nameInput.style.background=colorInput.value;
+        nameInput.oninput=e=>{t.name=e.target.value; renderGantt();};
 
         colorInput.oninput=e=>{ setVar(cssVar, e.target.value); nameInput.style.background=e.target.value; renderGantt(); };
 
         wrap.appendChild(colorInput); wrap.appendChild(nameInput); tdN.appendChild(wrap);
 
-        const hrs=document.createElement('input'); hrs.type='number'; hrs.step='0.1'; hrs.min='0'; hrs.value=fmtH(t.duration); hrs.className='task-hrs'; hrs.oninput=e=>{t.duration=parseFloat(e.target.value)||0; renderAll();}; tdH.appendChild(hrs);
-        const btn=document.createElement('button'); btn.className='remove'; btn.innerHTML='&times;'; btn.onclick=()=>{tasks=tasks.filter(x=>x.id!==t.id); renderAll();}; tdA.appendChild(btn);
+        const hrs=document.createElement('input');
+        hrs.type='number';
+        hrs.step='0.1';
+        hrs.min='0';
+        hrs.inputMode='decimal';
+        hrs.value=t.duration;
+        hrs.className='task-hrs';
+        hrs.oninput=e=>{
+          const val=e.target.value;
+          if(val==="" || val===".") return; // permite escribir decimales
+          t.duration=parseFloat(val)||0;
+          renderAll();
+        };
+        tdH.appendChild(hrs);
+
+        const btn=document.createElement('button'); btn.className='remove'; btn.innerHTML='&times;';
+        btn.onclick=()=>{tasks=tasks.filter(x=>x.id!==t.id); renderAll();};
+        tdA.appendChild(btn);
 
         tr.append(tdN,tdH,tdA); tbody.appendChild(tr);
       });
@@ -150,44 +202,149 @@
 
     // ====== GANTT ======
     function renderGantt(){
+      // calcular totales
       const totalHours=calcTotalHours(tasks);
-      const {unit,hoursPerUnit,totalUnits,totalGridHours}=getTimelineUnit(totalHours);
+
+      const calc = tasks.map(t=>{
+        const dur=parseFloat(Number(t.duration).toFixed(2))||0;
+        const start=(typeof t._startHour==="number") ? t._startHour : 0;
+        return {...t,duration:dur,startHour:start,endHour:start+dur};
+      });
+
+      const projectEndHour = calc.length ? Math.max(...calc.map(t=>t.endHour)) : 0;
+      const hoursForTimeline = Math.max(projectEndHour, totalHours);
+      const {unit,hoursPerUnit,totalUnits,totalGridHours}=getTimelineUnit(hoursForTimeline);
+
       const totalLaboralDays=(totalHours/HOURS_PER_DAY).toFixed(1);
-      $('#meta').innerHTML=`<span class="badge">Horas Totales: <b>${totalHours.toFixed(1)} hh</b></span><span class="badge">${totalLaboralDays} ${totalLaboralDays==='1.0'?'día':'días'} laborales</span><span class="badge">Unidad de Tiempo: <b>${unit==='day'?'Días':'Semanas'}</b> (${totalUnits} ${unit==='day'?'días':'semanas'})</span>`;
+      $('#meta').innerHTML=
+        `<span class="badge">Horas Totales: <b>${totalHours.toFixed(1)} hh</b></span>`+
+        `<span class="badge">${totalLaboralDays} ${totalLaboralDays==='1.0'?'día':'días'} laborales</span>`+
+        `<span class="badge">Unidad de Tiempo: <b>${unit==='day'?'Días':'Semanas'}</b> (${totalUnits} ${unit==='day'?'días':'semanas'})</span>`;
 
-      const title=$('#title').value; const sub=$('#subtitle').value; $('#header').textContent=`${title} (${totalLaboralDays} ${totalLaboralDays==='1.0'?'día':'días'} / ${totalHours.toFixed(1)} HH)`; $('#subtitleView').textContent=sub;
+      const title=$('#title').value; const sub=$('#subtitle').value;
+      $('#header').textContent=`${title} (${totalLaboralDays} ${totalLaboralDays==='1.0'?'día':'días'} / ${totalHours.toFixed(1)} HH)`;
+      $('#subtitleView').textContent=sub;
 
-      const gantt=$('#gantt-chart'); gantt.style.gridTemplateColumns=`250px repeat(${totalUnits},1fr)`;
-      const labels=$('#timelineLabels'); labels.style.gridTemplateColumns=`repeat(${totalUnits},1fr)`; labels.innerHTML='';
-      for(let i=0;i<totalUnits;i++){const d=document.createElement('div'); d.className='timeline-label'; d.textContent=`${unit==='day'?'Día':'Semana'} ${i+1}`; labels.appendChild(d);} 
+      const gantt=$('#gantt-chart');
+      gantt.style.gridTemplateColumns=`250px repeat(${totalUnits},1fr)`;
+      const labels=$('#timelineLabels');
+      labels.style.gridTemplateColumns=`repeat(${totalUnits},1fr)`; labels.innerHTML='';
+      for(let i=0;i<totalUnits;i++){
+        const d=document.createElement('div');
+        d.className='timeline-label';
+        d.textContent=`${unit==='day'?'Día':'Semana'} ${i+1}`;
+        labels.appendChild(d);
+      }
 
       const body=$('#gantt-body'); body.innerHTML='';
-      let start=0; const calc=tasks.map(t=>{const dur=parseFloat(Number(t.duration).toFixed(1))||0; const obj={...t,startHour:start,endHour:start+dur}; start+=dur; return obj;});
-
-      calc.forEach((t,i)=>{
+      calc.forEach((t)=>{
         const cell=document.createElement('div'); cell.className='task-cell'; cell.textContent=t.name; body.appendChild(cell);
+
         const row=document.createElement('div'); row.className='bar-row'; row.style.gridColumn=`2 / ${totalUnits+2}`;
-        const seg=document.createElement('div'); seg.className=`task-bar-segment ${t.color}`; const width=(t.duration/totalGridHours)*100; const left=(t.startHour/totalGridHours)*100; seg.style.width=width+'%'; seg.style.left=left+'%'; seg.textContent=`${fmtH(t.duration)} hh`;
+
+        const seg=document.createElement('div');
+        seg.className=`task-bar-segment ${t.color}`;
+        const width=(t.duration/totalGridHours)*100;
+        const left=(t.startHour/totalGridHours)*100;
+        seg.style.width=width+'%';
+        seg.style.left=left+'%';
+        // sin texto de horas dentro de la barra
+
+        // === Drag & drop de barras ===
+        seg.draggable = true;
+
+        seg.addEventListener("dragstart",(e)=>{
+          e.dataTransfer.setData("task-id", t.id);
+          e.dataTransfer.effectAllowed = "move";
+        });
+
+        row.addEventListener("dragover",(e)=>{
+          e.preventDefault();
+        });
+
+        row.addEventListener("drop",(e)=>{
+          e.preventDefault();
+          const id=e.dataTransfer.getData("task-id");
+          const task=tasks.find(x=>String(x.id)===String(id));
+          if(!task) return;
+
+          const rect=row.getBoundingClientRect();
+          let x=e.clientX-rect.left;
+          x=Math.max(0,Math.min(x,rect.width));
+          let percent=x/rect.width;
+          let newStart=percent*totalGridHours;
+
+          const dur=parseFloat(task.duration)||0;
+          if(totalGridHours>dur){
+            newStart=Math.max(0,Math.min(newStart,totalGridHours-dur));
+          }else{
+            newStart=0;
+          }
+
+          task._startHour=newStart;
+          reorderTasksByStart();
+          renderAll();
+        });
+
         row.appendChild(seg);
-        const divs=document.createElement('div'); divs.className='grid-overlay'; divs.style.gridTemplateColumns=`repeat(${totalUnits},1fr)`; for(let j=0;j<totalUnits;j++){const dv=document.createElement('div'); dv.className='bar-cell-divider'; divs.appendChild(dv);} row.appendChild(divs);
+
+        const divs=document.createElement('div');
+        divs.className='grid-overlay';
+        divs.style.gridTemplateColumns=`repeat(${totalUnits},1fr)`;
+        for(let j=0;j<totalUnits;j++){
+          const dv=document.createElement('div'); dv.className='bar-cell-divider'; divs.appendChild(dv);
+        }
+        row.appendChild(divs);
         body.appendChild(row);
       });
 
       // Go Live al final del proyecto si no se arrastra
-      const line=$('#goLiveLine'); const projectEndPercent= totalHours>0 ? Math.min(100, Math.max(0,(totalHours/totalGridHours)*100)) : 0; if(!isDragging){ goLivePercent = projectEndPercent; } line.style.left=goLivePercent+'%';
+      const line=$('#goLiveLine');
+      const projectEndPercent = totalGridHours>0 ? Math.min(100, Math.max(0,(projectEndHour/totalGridHours)*100)) : 0;
+      if(!isDragging){ goLivePercent = projectEndPercent; }
+      line.style.left=goLivePercent+'%';
     }
 
     function renderAll(){renderTasksTable();renderGantt();}
 
     // ====== EVENTOS ======
-    $('#addBtn').onclick=()=>{const idx=tasks.length%TASK_COLORS.length; tasks.push({id:rndId(),name:'Nueva Tarea',duration:8,color:TASK_COLORS[idx]}); renderAll();};
+    $('#addBtn').onclick=()=>{
+      const idx=tasks.length%TASK_COLORS.length;
+      // colocar nueva tarea al final del proyecto
+      let lastEnd=0;
+      tasks.forEach(t=>{
+        const s=t._startHour||0;
+        const d=parseFloat(t.duration)||0;
+        lastEnd=Math.max(lastEnd,s+d);
+      });
+      tasks.push({id:rndId(),name:'Nueva Tarea',duration:8,color:TASK_COLORS[idx],_startHour:lastEnd});
+      renderAll();
+    };
     $('#title').oninput=$('#subtitle').oninput=()=>renderGantt();
 
     const lineEl=$('#goLiveLine'), container=$('#goLiveLineContainer');
     lineEl.addEventListener('pointerdown',e=>{isDragging=true; lineEl.setPointerCapture(e.pointerId); lineEl.style.cursor='grabbing';});
     document.addEventListener('pointerup',()=>{isDragging=false; lineEl.style.cursor='grab';});
-    document.addEventListener('pointermove',e=>{if(!isDragging) return; const rect=container.getBoundingClientRect(); let x=e.clientX-rect.left; x=Math.max(0,Math.min(x,rect.width)); goLivePercent=(x/rect.width)*100; lineEl.style.left=goLivePercent+'%';});
-    lineEl.addEventListener('keydown',e=>{let step=1; if(e.key==='ArrowLeft'){goLivePercent=Math.max(0,goLivePercent-step); renderGantt(); e.preventDefault();} if(e.key==='ArrowRight'){goLivePercent=Math.min(100,goLivePercent+step); renderGantt(); e.preventDefault();}}); lineEl.tabIndex=0;
+    document.addEventListener('pointermove',e=>{
+      if(!isDragging) return;
+      const rect=container.getBoundingClientRect();
+      let x=e.clientX-rect.left;
+      x=Math.max(0,Math.min(x,rect.width));
+      goLivePercent=(x/rect.width)*100;
+      lineEl.style.left=goLivePercent+'%';
+    });
+    lineEl.addEventListener('keydown',e=>{
+      let step=1;
+      if(e.key==='ArrowLeft'){
+        goLivePercent=Math.max(0,goLivePercent-step);
+        renderGantt(); e.preventDefault();
+      }
+      if(e.key==='ArrowRight'){
+        goLivePercent=Math.min(100,goLivePercent+step);
+        renderGantt(); e.preventDefault();
+      }
+    });
+    lineEl.tabIndex=0;
 
     // ====== INICIO ======
     renderAll();
@@ -220,4 +377,3 @@
   </script>
 </body>
 </html>
-

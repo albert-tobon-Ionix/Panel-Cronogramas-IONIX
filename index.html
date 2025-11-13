@@ -24,6 +24,8 @@
     .input{width:100%;padding:10px 12px;border:1px solid #d7dbe3;border-radius:10px;font-weight:600}
     .btn{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border-radius:10px;background:var(--bar-1);color:#fff;border:0;font-weight:700;cursor:pointer;box-shadow:0 6px 16px rgba(0,91,150,.25)}
     .remove{background:transparent;border:0;color:#e11d48;font-size:22px;cursor:pointer}
+    .reorder{background:transparent;border:0;font-size:16px;cursor:pointer;color:#64748b;padding:0 3px}
+    .reorder:disabled{opacity:.3;cursor:default}
     .task-name-chip{width:100%;border:0;border-radius:8px;padding:8px 10px;color:#fff;font-weight:700;text-shadow:0 1px 1px rgba(0,0,0,.4)}
     .task-hrs{width:100%;text-align:center;padding:8px 10px;border:1px solid #d7dbe3;border-radius:8px}
 
@@ -73,7 +75,7 @@
       </div>
       <div class="meta" id="meta"></div>
 
-      <!-- NUEVOS CHECKS PARA MOSTRAR / OCULTAR DÍAS Y HH EN EL TÍTULO -->
+      <!-- Checkboxes para mostrar/ocultar días y HH en el título -->
       <div class="meta-toggles">
         <label><input type="checkbox" id="showDays" checked> Mostrar días en el título</label>
         <label><input type="checkbox" id="showHours" checked> Mostrar HH en el título</label>
@@ -84,7 +86,13 @@
       <h2>Detalle de Tareas</h2>
       <div style="overflow-x:auto">
         <table>
-          <thead><tr><th>Tarea</th><th style="width:120px;text-align:center">Duración (hh)</th><th style="width:70px">Acción</th></tr></thead>
+          <thead>
+          <tr>
+            <th>Tarea</th>
+            <th style="width:120px;text-align:center">Duración (hh)</th>
+            <th style="width:110px">Acción</th>
+          </tr>
+          </thead>
           <tbody id="tbody"></tbody>
         </table>
       </div>
@@ -139,6 +147,13 @@
     const getVar=(n)=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
     const setVar=(n,v)=>document.documentElement.style.setProperty(n,v);
 
+    function moveTask(fromIndex,toIndex){
+      if(toIndex<0 || toIndex>=tasks.length) return;
+      const [item]=tasks.splice(fromIndex,1);
+      tasks.splice(toIndex,0,item);
+      renderAll();
+    }
+
     // ====== TABLA ======
     function renderTasksTable(){
       const tbody=$('#tbody'); tbody.innerHTML='';
@@ -175,11 +190,31 @@
           const num=parseFloat(val);
           if(!isNaN(num)){ t.duration=num; renderGantt(); }
         };
-
         tdH.appendChild(hrs);
 
-        const btn=document.createElement('button'); btn.className='remove'; btn.innerHTML='&times;';
+        // acciones: subir, bajar, eliminar
+        const upBtn=document.createElement('button');
+        upBtn.className='reorder';
+        upBtn.innerHTML='↑';
+        upBtn.disabled=i===0;
+        upBtn.title='Mover arriba';
+        upBtn.onclick=()=>moveTask(i,i-1);
+
+        const downBtn=document.createElement('button');
+        downBtn.className='reorder';
+        downBtn.innerHTML='↓';
+        downBtn.disabled=i===tasks.length-1;
+        downBtn.title='Mover abajo';
+        downBtn.onclick=()=>moveTask(i,i+1);
+
+        const btn=document.createElement('button');
+        btn.className='remove';
+        btn.innerHTML='&times;';
+        btn.title='Eliminar tarea';
         btn.onclick=()=>{tasks=tasks.filter(x=>x.id!==t.id); renderAll();};
+
+        tdA.appendChild(upBtn);
+        tdA.appendChild(downBtn);
         tdA.appendChild(btn);
 
         tr.append(tdN,tdH,tdA); tbody.appendChild(tr);
@@ -196,8 +231,6 @@
       $('#meta').innerHTML=`<span class="badge">Horas Totales: <b>${totalHours.toFixed(1)} hh</b></span><span class="badge">${totalLaboralDays} ${totalLaboralDays==='1.0'?'día':'días'} laborales</span><span class="badge">Unidad de Tiempo: <b>${unit==='day'?'Días':'Semanas'}</b> (${totalUnits} ${unit==='day'?'días':'semanas'})</span>`;
 
       const title=$('#title').value; const sub=$('#subtitle').value;
-
-      // LECTURA DE CHECKBOXES
       const showDays = $('#showDays') ? $('#showDays').checked : true;
       const showHours = $('#showHours') ? $('#showHours').checked : true;
       let parts = [];
@@ -247,7 +280,6 @@
         seg.style.left=left+'%';
         seg.textContent = ""; // sin texto
 
-        // Drag horizontal de la barra
         seg.addEventListener('pointerdown', (e)=>{
           draggingTaskId = t.id;
           draggingTaskDuration = t.duration;
@@ -300,13 +332,11 @@
     };
     $('#title').oninput=$('#subtitle').oninput=()=>renderGantt();
 
-    // checkboxes título
     const showDaysInput = $('#showDays');
     const showHoursInput = $('#showHours');
     if(showDaysInput)  showDaysInput.addEventListener('change', renderGantt);
     if(showHoursInput) showHoursInput.addEventListener('change', renderGantt);
 
-    // Go Live
     const lineEl=$('#goLiveLine'), container=$('#goLiveLineContainer');
     lineEl.addEventListener('pointerdown',e=>{
       isDragging=true;
@@ -385,12 +415,3 @@
           const after = getVar(cssVar);
           console.assert(before !== after, 'La variable CSS debería actualizarse al cambiar el picker');
         }
-        console.assert(document.querySelectorAll('.task-bar-segment').length === tasks.length, 'El gantt debe renderizar una barra por tarea');
-        console.log('%c[TEST] OK','color: #16a34a');
-      }catch(e){
-        console.error('[TEST] Falló:', e);
-      }
-    })();
-  </script>
-</body>
-</html>

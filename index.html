@@ -143,20 +143,40 @@
     const $ = sel => document.querySelector(sel);
     const rndId = () => Math.random().toString(36).slice(2);
     const calcTotalHours = arr => arr.reduce((s,t)=>s+(parseFloat(t.duration)||0),0);
+
+    // Selección dinámica de unidades: día / semana / mes
     function getTimelineUnit(totalHours){
-      const d = totalHours / HOURS_PER_DAY;
+      const d = totalHours / HOURS_PER_DAY; // días laborales totales
       let unit, hpu, units;
-      if(d <= DAYS_PER_WEEK){
+
+      // <= 1 semana: mostramos por días
+      if (d <= DAYS_PER_WEEK) {
         unit = "day";
         hpu = HOURS_PER_DAY;
         units = Math.max(1, Math.ceil(d));
-      } else {
+
+      // > 1 semana y <= 4 semanas: mostramos por semanas
+      } else if (d <= 4 * DAYS_PER_WEEK) {
         unit = "week";
         hpu = HOURS_PER_WEEK;
         units = Math.ceil(d / DAYS_PER_WEEK);
+
+      // > 4 semanas: mostramos por meses (20 días hábiles ≈ 1 mes)
+      } else {
+        unit = "month";
+        const DAYS_PER_MONTH = 4 * DAYS_PER_WEEK; // 20 días laborales
+        hpu = HOURS_PER_DAY * DAYS_PER_MONTH;     // horas por “mes”
+        units = Math.ceil(d / DAYS_PER_MONTH);
       }
-      return {unit, hoursPerUnit:hpu, totalUnits:units, totalGridHours:units*hpu};
+
+      return {
+        unit,
+        hoursPerUnit: hpu,
+        totalUnits: units,
+        totalGridHours: units * hpu
+      };
     }
+
     const getVar = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
     const setVar = (n,v) => document.documentElement.style.setProperty(n,v);
 
@@ -322,10 +342,21 @@
       draggingTotalGridHours = totalGridHours;
 
       const totalLaboralDays = (totalHours / HOURS_PER_DAY).toFixed(1);
+
+      const unitLabel =
+        unit === "day"  ? "Días"   :
+        unit === "week" ? "Semanas":
+                          "Meses";
+
+      const unitPlural =
+        unit === "day"  ? "días"   :
+        unit === "week" ? "semanas":
+                          "meses";
+
       $("#meta").innerHTML =
         `<span class="badge">Horas Totales: <b>${totalHours.toFixed(1)} hh</b></span>` +
         `<span class="badge">${totalLaboralDays} ${totalLaboralDays==="1.0"?"día":"días"} laborales</span>` +
-        `<span class="badge">Unidad de Tiempo: <b>${unit==="day"?"Días":"Semanas"}</b> (${totalUnits} ${unit==="day"?"días":"semanas"})</span>`;
+        `<span class="badge">Unidad de Tiempo: <b>${unitLabel}</b> (${totalUnits} ${unitPlural})</span>`;
 
       const title = $("#title").value;
       const sub   = $("#subtitle").value;
@@ -344,10 +375,16 @@
       const labels = $("#timelineLabels");
       labels.style.gridTemplateColumns = `repeat(${totalUnits},1fr)`;
       labels.innerHTML = "";
-      for(let i=0;i<totalUnits;i++){
+      for (let i = 0; i < totalUnits; i++) {
         const d = document.createElement("div");
-        d.className="timeline-label";
-        d.textContent = `${unit==="day"?"Día":"Semana"} ${i+1}`;
+        d.className = "timeline-label";
+
+        const labelText =
+          unit === "day"  ? `Día ${i + 1}`    :
+          unit === "week" ? `Semana ${i + 1}` :
+                            `Mes ${i + 1}`;
+
+        d.textContent = labelText;
         labels.appendChild(d);
       }
 
